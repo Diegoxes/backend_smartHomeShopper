@@ -1,8 +1,9 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/smarthome_db
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:postgres}
+    # En Render: define SPRING_DATASOURCE_URL, USERNAME y PASSWORD en el panel (sin commitear).
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/smarthome_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -17,24 +18,24 @@ spring:
       write-dates-as-timestamps: false
 
 server:
-  # Render (y otros PaaS) inyectan PORT; en local sigue siendo 8080 por defecto
   port: ${PORT:8080}
   servlet:
     context-path: /api
   forward-headers-strategy: framework
 
 jwt:
-  secret: ${JWT_SECRET:SmartHomeShopperSecretKey2024VeryLongSecureKey!}
-  expiration: 86400000   # 24 hours
+  # Obligatorio en producción (Render: añade JWT_SECRET en Environment). No pongas el valor aquí.
+  secret: ${JWT_SECRET:}
+  expiration: 86400000
 
 openai:
-  api-key: ${OPENAI_API_KEY:your-key-here}
+  api-key: ${OPENAI_API_KEY:}
   model: gpt-3.5-turbo
 
 twilio:
   account-sid: ${TWILIO_ACCOUNT_SID:}
   auth-token: ${TWILIO_AUTH_TOKEN:}
-  whatsapp-from: whatsapp:+14155238886
+  whatsapp-from: ${TWILIO_WHATSAPP_FROM:whatsapp:+14155238886}
 
 logging:
   level:

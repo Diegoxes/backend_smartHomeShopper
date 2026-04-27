@@ -26,7 +26,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/smarthome_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
-      # Opcional en producción: JWT_SECRET, OPENAI_API_KEY, etc.
+      # Solo para desarrollo local en Docker (no uses esta cadena en producción)
+      JWT_SECRET: local-docker-dev-only-min-32-chars-for-hmac-sha256!!
     depends_on:
       postgres:
         condition: service_healthy
