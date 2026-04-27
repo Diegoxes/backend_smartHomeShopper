@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: smarthome-postgres
+    environment:
+      POSTGRES_DB: smarthome_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - smarthome_pgdata:/var/lib/postgresql/data
+
+volumes:
+  smarthome_pgdata:

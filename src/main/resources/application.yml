@@ -1,0 +1,40 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/smarthome_db
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:diegm0204$}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+jwt:
+  secret: ${JWT_SECRET:SmartHomeShopperSecretKey2024VeryLongSecureKey!}
+  expiration: 86400000   # 24 hours
+
+openai:
+  api-key: ${OPENAI_API_KEY:your-key-here}
+  model: gpt-3.5-turbo
+
+twilio:
+  account-sid: ${TWILIO_ACCOUNT_SID:}
+  auth-token: ${TWILIO_AUTH_TOKEN:}
+  whatsapp-from: whatsapp:+14155238886
+
+logging:
+  level:
+    com.smarthome: DEBUG
+    org.springframework.security: WARN
