@@ -2,7 +2,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/smarthome_db
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:diegm0204$}
+    password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
