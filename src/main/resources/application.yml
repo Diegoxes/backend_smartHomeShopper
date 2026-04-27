@@ -17,9 +17,11 @@ spring:
       write-dates-as-timestamps: false
 
 server:
-  port: 8080
+  # Render (y otros PaaS) inyectan PORT; en local sigue siendo 8080 por defecto
+  port: ${PORT:8080}
   servlet:
     context-path: /api
+  forward-headers-strategy: framework
 
 jwt:
   secret: ${JWT_SECRET:SmartHomeShopperSecretKey2024VeryLongSecureKey!}

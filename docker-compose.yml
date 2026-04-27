@@ -10,6 +10,26 @@ services:
       - "5432:5432"
     volumes:
       - smarthome_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d smarthome_db"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  api:
+    build: .
+    container_name: smarthome-api
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/smarthome_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      # Opcional en producción: JWT_SECRET, OPENAI_API_KEY, etc.
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   smarthome_pgdata:
