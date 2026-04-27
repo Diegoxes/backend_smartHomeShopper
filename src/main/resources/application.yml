@@ -1,10 +1,11 @@
 spring:
   datasource:
-    # En Render: define SPRING_DATASOURCE_URL, USERNAME y PASSWORD en el panel (sin commitear).
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/smarthome_db}
-    username: ${SPRING_DATASOURCE_USERNAME:postgres}
-    password: ${SPRING_DATASOURCE_PASSWORD:}
+    # Render: estas variables se configuran en el panel (NO aquí en duro)
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -13,6 +14,7 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+
   jackson:
     serialization:
       write-dates-as-timestamps: false
@@ -24,13 +26,12 @@ server:
   forward-headers-strategy: framework
 
 jwt:
-  # Obligatorio en producción (Render: añade JWT_SECRET en Environment). No pongas el valor aquí.
-  secret: ${JWT_SECRET:}
+  # valor por defecto SOLO para evitar crash si no configuras env (pero igual debes ponerlo en Render)
+  secret: ${JWT_SECRET:cursoDesarrolloSoftware15}
   expiration: 86400000
 
 openai:
   api-key: ${OPENAI_API_KEY:}
-  model: gpt-3.5-turbo
 
 twilio:
   account-sid: ${TWILIO_ACCOUNT_SID:}
