@@ -42,3 +42,5 @@ logging:
   level:
     com.smarthome: DEBUG
     org.springframework.security: WARN
+
+# CORS: el backend acepta cualquier origen (configuración permisiva; restringe en prod si lo necesitas).

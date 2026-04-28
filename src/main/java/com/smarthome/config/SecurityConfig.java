@@ -69,7 +69,8 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsSource() {
         CorsConfiguration cfg = new CorsConfiguration();
-        cfg.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
+        // Cualquier origen (patrón * + credentials es válido en Spring; no usar setAllowedOrigins("*")).
+        cfg.setAllowedOriginPatterns(List.of("*"));
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
         cfg.setAllowCredentials(true);
