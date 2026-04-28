@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.Locale;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -15,15 +17,21 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
+    /** Misma forma de guardar y buscar el email (evita fallos login por mayúsculas / espacios). */
+    private static String normalizeEmail(String email) {
+        return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
+    }
+
     public Dto.AuthResponse register(Dto.RegisterRequest req) {
-        if (userRepo.existsByEmail(req.getEmail()))
+        String email = normalizeEmail(req.getEmail());
+        if (userRepo.existsByEmailIgnoreCase(email))
             throw new RuntimeException("Email already registered");
 
         User user = User.builder()
-                .email(req.getEmail())
+                .email(email)
                 .password(passwordEncoder.encode(req.getPassword()))
-                .name(req.getName())
-                .whatsappNumber(req.getWhatsappNumber())
+                .name(req.getName().trim())
+                .whatsappNumber(req.getWhatsappNumber() != null ? req.getWhatsappNumber().trim() : null)
                 .build();
         userRepo.save(user);
 
@@ -35,7 +43,8 @@ public class AuthService {
     }
 
     public Dto.AuthResponse login(Dto.LoginRequest req) {
-        User user = userRepo.findByEmail(req.getEmail())
+        String email = normalizeEmail(req.getEmail());
+        User user = userRepo.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new RuntimeException("Invalid credentials"));
         if (!passwordEncoder.matches(req.getPassword(), user.getPassword()))
             throw new RuntimeException("Invalid credentials");

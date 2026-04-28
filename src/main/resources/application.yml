@@ -26,8 +26,8 @@ server:
   forward-headers-strategy: framework
 
 jwt:
-  # valor por defecto SOLO para evitar crash si no configuras env (pero igual debes ponerlo en Render)
-  secret: ${JWT_SECRET:cursoDesarrolloSoftware15}
+  # En producción usa JWT_SECRET largo (≥32 caracteres ASCII recomendado). Valores cortos se hashean con SHA-256 al vuelo.
+  secret: ${JWT_SECRET:smarthome-shopper-dev-only-32chars-min!}
   expiration: 86400000
 
 openai:
