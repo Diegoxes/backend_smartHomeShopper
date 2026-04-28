@@ -132,7 +132,7 @@ public class ProductService {
 
     private Double predictDaysUntilEmpty(Product p) {
         LocalDateTime since = LocalDateTime.now().minusDays(30);
-        Double avg = logRepo.avgDailyConsumption(p.getId(), since, 30);
+        Double avg = logRepo.avgDailyConsumption(p.getId(), since, 30, ConsumptionLog.ActionType.CONSUMED);
         if (avg == null || avg == 0) return null;
         return p.getQuantity() / avg;
     }

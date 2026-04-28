@@ -12,9 +12,9 @@ La aplicación es una **API REST** para **inventario doméstico por usuario**:
 - Puede **crear, listar, consultar, actualizar y borrar productos** (nombre, cantidad, mínimo para alerta, unidad, caducidad, etc.).
 - Puede **registrar consumo** (bajar stock) y **reposición** (subir stock); cada operación puede dejar trazas en base de datos (`ConsumptionLog`).
 - Un **dashboard** resume cuántos productos hay, cuántos van con **stock bajo** y cuántos **vencen pronto** (7 días), además de listas filtradas.
-- Un **webhook de WhatsApp** (pensado para **Twilio**) recibe mensajes: responde con comandos cortos, consumo rápido con prefijo `-`, o intenta interpretar texto libre con **OpenAI** y actualizar inventario.
+- Un **webhook de WhatsApp** (pensado para **Twilio**) recibe mensajes: responde con comandos cortos, consumo rápido con prefijo `-`, o intenta interpretar texto libre con **DeepSeek** y actualizar inventario.
 
-**Requisitos de entorno:** PostgreSQL accesible según `application.yml`; para la rama IA de WhatsApp, una **API key válida de OpenAI**.
+**Requisitos de entorno:** PostgreSQL accesible según `application.yml`; para la rama IA de WhatsApp, **`DEEPSEEK_API_KEY`** válida.
 
 **URL base:** todas las rutas de esta API llevan el prefijo del servidor y el *context path*:
 
@@ -233,7 +233,7 @@ Los flags `lowStock` y `expiringSoon` en cada `ProductResponse` son coherentes c
 3. Comandos (ej. `inventario`, `stock`, `lista`): resumen de inventario.
 4. Comandos (ej. `alertas`, `bajos`): bajo stock y próximos a vencer.
 5. Mensaje que empieza por `-`: consumo rápido (ej. `-leche` o `-arroz 0.5`).
-6. Cualquier otro texto: se envía a **OpenAI**; se espera JSON con acciones `add` / `consume` / etc. y se actualiza inventario según corresponda. Sin API key válida, el usuario recibe un mensaje de error amigable.
+6. Cualquier otro texto: se envía a **DeepSeek**; se espera JSON con acciones `add` / `consume` / etc. y se actualiza inventario según corresponda. Sin API key válida, el usuario recibe un mensaje de error amigable.
 
 **Respuesta:** `200 OK` con cuerpo **XML** (TwiML), no JSON.
 

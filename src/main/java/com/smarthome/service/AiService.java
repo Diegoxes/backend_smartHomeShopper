@@ -26,11 +26,14 @@ public class AiService {
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
 
-    @Value("${openai.api-key}")
-    private String openAiKey;
+    @Value("${deepseek.api-key}")
+    private String deepseekApiKey;
 
-    @Value("${openai.model}")
-    private String openAiModel;
+    @Value("${deepseek.base-url}")
+    private String deepseekBaseUrl;
+
+    @Value("${deepseek.model}")
+    private String deepseekModel;
 
     public String parseWhatsAppMessage(User user, String message) {
         String systemPrompt = """
@@ -51,14 +54,15 @@ public class AiService {
             """;
 
         try {
-            String jsonResponse = callOpenAi(systemPrompt, message);
+            String raw = callDeepSeekChat(systemPrompt, message);
+            String jsonResponse = extractJsonObject(raw);
             JsonNode root = objectMapper.readTree(jsonResponse);
 
             String action = root.path("action").asText("unknown");
             String reply  = root.path("reply").asText("Entendido.");
             JsonNode items = root.path("items");
 
-            if ("add".equals(action) || "consume".equals(action)) {
+            if (("add".equals(action) || "consume".equals(action)) && items.isArray()) {
                 List<Product> userProducts = productRepo.findByUserId(user.getId());
                 for (JsonNode item : items) {
                     String name     = item.path("name").asText();
@@ -84,7 +88,7 @@ public class AiService {
                                     .build();
                             productRepo.save(p);
                         }
-                    } else {
+                    } else if ("consume".equals(action)) {
                         existing.ifPresent(p -> {
                             p.setQuantity(Math.max(0, p.getQuantity() - quantity));
                             productRepo.save(p);
@@ -96,36 +100,66 @@ public class AiService {
             return reply;
 
         } catch (Exception e) {
-            log.error("AI parsing failed: {}", e.getMessage());
+            log.error("DeepSeek parsing failed: {}", e.getMessage());
             return "No pude entender tu mensaje. Prueba: \"Compré 2 leches y 1kg de arroz\"";
         }
     }
 
-    private String callOpenAi(String system, String userMsg) {
+    private String callDeepSeekChat(String system, String userMsg) {
+        if (deepseekApiKey == null || deepseekApiKey.isBlank()) {
+            throw new IllegalStateException("deepseek.api-key / DEEPSEEK_API_KEY no configurada");
+        }
+        String base = deepseekBaseUrl.replaceAll("/+$", "");
+        String url = base + "/v1/chat/completions";
+
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(openAiKey);
+        headers.setBearerAuth(deepseekApiKey);
 
         Map<String, Object> body = new HashMap<>();
-        body.put("model", openAiModel);
+        body.put("model", deepseekModel);
         body.put("temperature", 0.2);
         body.put("messages", List.of(
                 Map.of("role", "system", "content", system),
-                Map.of("role", "user",   "content", userMsg)
+                Map.of("role", "user", "content", userMsg)
         ));
 
         ResponseEntity<Map> response = restTemplate.exchange(
-                "https://api.openai.com/v1/chat/completions",
+                url,
                 HttpMethod.POST,
                 new HttpEntity<>(body, headers),
                 Map.class
         );
 
+        Map<String, Object> respBody = response.getBody();
+        if (respBody == null) {
+            throw new IllegalStateException("Respuesta vacía de DeepSeek");
+        }
         @SuppressWarnings("unchecked")
-        List<Map<String, Object>> choices = (List<Map<String, Object>>) response.getBody().get("choices");
+        List<Map<String, Object>> choices = (List<Map<String, Object>>) respBody.get("choices");
+        if (choices == null || choices.isEmpty()) {
+            throw new IllegalStateException("choices vacío en respuesta DeepSeek");
+        }
         @SuppressWarnings("unchecked")
         Map<String, Object> msg = (Map<String, Object>) choices.get(0).get("message");
-        return (String) msg.get("content");
+        Object content = msg != null ? msg.get("content") : null;
+        if (content == null) {
+            throw new IllegalStateException("message.content ausente");
+        }
+        return content.toString().trim();
+    }
+
+    /** Recorta fences ```json ... ``` si el modelo los incluye. */
+    private static String extractJsonObject(String raw) {
+        String s = raw.trim();
+        if (s.startsWith("```")) {
+            int start = s.indexOf('{');
+            int end = s.lastIndexOf('}');
+            if (start >= 0 && end > start) {
+                return s.substring(start, end + 1);
+            }
+        }
+        return s;
     }
 
     private Product.UnitType safeUnit(String s) {

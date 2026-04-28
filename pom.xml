@@ -74,12 +74,7 @@
       <optional>true</optional>
     </dependency>
 
-    <!-- OpenAI (para NLP/IA) -->
-    <dependency>
-      <groupId>com.theokanning.openai-gpt3-java</groupId>
-      <artifactId>service</artifactId>
-      <version>0.18.2</version>
-    </dependency>
+    <!-- IA vía API compatible OpenAI (DeepSeek); las llamadas son RestTemplate en AiService -->
 
     <!-- Test -->
     <dependency>

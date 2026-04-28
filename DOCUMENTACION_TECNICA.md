@@ -2,7 +2,7 @@
 
 ## Resumen
 
-API REST en **Spring Boot 3.2** (Java 21) para gestión de inventario del hogar: productos por usuario, consumo y reposición, panel resumido y webhook de **WhatsApp (Twilio)** con enrutamiento por comandos y procesamiento de lenguaje natural vía **OpenAI**.
+API REST en **Spring Boot 3.2** (Java 21) para gestión de inventario del hogar: productos por usuario, consumo y reposición, panel resumido y webhook de **WhatsApp (Twilio)** con enrutamiento por comandos y procesamiento de lenguaje natural vía **DeepSeek** (API compatible OpenAI).
 
 ## Estructura del proyecto (Maven)
 
@@ -23,7 +23,7 @@ smarthome-shopper/
     │   ├── repository/         # Spring Data JPA
     │   └── service/            # Lógica de negocio, JWT, IA, WhatsApp
     └── resources/
-        └── application.yml     # Datasource, JWT, OpenAI, Twilio, servidor
+        └── application.yml     # Datasource, JWT, DeepSeek, Twilio, servidor
 ```
 
 ## Stack y dependencias principales
@@ -33,7 +33,7 @@ smarthome-shopper/
 | Framework | Spring Boot Web, Validation |
 | Persistencia | Spring Data JPA, Hibernate, PostgreSQL |
 | Seguridad | Spring Security (stateless), JWT (jjwt 0.12.x), BCrypt |
-| Integraciones | OpenAI Chat Completions (HTTP con RestTemplate), Twilio (webhook entrante; credenciales en yml para uso futuro) |
+| Integraciones | DeepSeek Chat Completions (HTTP con RestTemplate), Twilio (webhook entrante; credenciales en yml para uso futuro) |
 | Utilidades | Lombok |
 
 ## Modelo de datos (JPA)
@@ -54,7 +54,9 @@ Definidas en `application.yml` con valores por defecto. Sobrescribir con variabl
 | `spring.datasource.url` | JDBC (por defecto `localhost:5432/smarthome_db`) |
 | `JWT_SECRET` | Clave HMAC para firmar JWT (debe ser suficientemente larga para el algoritmo) |
 | `JWT` vía `jwt.expiration` | TTL del token en ms (por defecto 24 h) |
-| `OPENAI_API_KEY` | API key de OpenAI para `AiService` |
+| `DEEPSEEK_API_KEY` | API key de DeepSeek para `AiService` |
+| `DEEPSEEK_BASE_URL` | Opcional (por defecto `https://api.deepseek.com`) |
+| `DEEPSEEK_MODEL` | Opcional (por defecto `deepseek-chat`) |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` | Reservadas para integración Twilio (el webhook actual solo necesita la URL pública y el formulario que envía Twilio) |
 | `twilio.whatsapp-from` | Número origen de WhatsApp en formato Twilio |
 
@@ -104,7 +106,7 @@ La respuesta de producto incluye flags `lowStock`, `expiringSoon` y `daysUntilEm
 
 1. Comandos: `inventario` / `stock` / `lista`; `alertas` / `bajos`.
 2. Mensajes que empiezan por `-` consumo rápido (ej. `-leche`, `-arroz 0.5`).
-3. Resto: `AiService` llama a OpenAI y espera JSON con `action`, `items`, `reply`; aplica altas/consumos sobre productos existentes o crea productos nuevos en altas.
+3. Resto: `AiService` llama a DeepSeek y espera JSON con `action`, `items`, `reply`; aplica altas/consumos sobre productos existentes o crea productos nuevos en altas.
 
 ## Servicios (lógica)
 
@@ -124,7 +126,7 @@ La respuesta de producto incluye flags `lowStock`, `expiringSoon` y `daysUntilEm
    ```bash
    docker compose up -d
    ```
-2. Opcional: exportar `JWT_SECRET`, `OPENAI_API_KEY`, `DB_*` si no usas los valores por defecto del yml.
+2. Opcional: exportar `JWT_SECRET`, `DEEPSEEK_API_KEY`, `DB_*` si no usas los valores por defecto del yml.
 3. Compilar y arrancar (con JDK 21 instalado):
    ```bash
    ./mvnw spring-boot:run

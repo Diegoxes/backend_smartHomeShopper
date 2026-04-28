@@ -15,12 +15,13 @@ public interface ConsumptionLogRepository extends JpaRepository<ConsumptionLog, 
         SELECT COALESCE(ABS(SUM(c.quantityChange)) / :days, 0)
         FROM ConsumptionLog c
         WHERE c.product.id = :productId
-          AND c.actionType = 'CONSUMED'
+          AND c.actionType = :actionType
           AND c.createdAt >= :since
         """)
     Double avgDailyConsumption(
         @Param("productId") String productId,
         @Param("since") LocalDateTime since,
-        @Param("days") int days
+        @Param("days") int days,
+        @Param("actionType") ConsumptionLog.ActionType actionType
     );
 }
