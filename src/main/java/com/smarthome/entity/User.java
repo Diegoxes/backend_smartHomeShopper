@@ -29,6 +29,10 @@ public class User {
     @Column(name = "whatsapp_number")
     private String whatsappNumber;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "role_id", nullable = false)
+    private Role role;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

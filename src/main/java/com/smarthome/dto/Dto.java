@@ -25,6 +25,8 @@ public class Dto {
         private String userId;
         private String name;
         private String email;
+        /** Uno de: OWNER, MANAGER, MEMBER, VIEWER */
+        private String role;
     }
 
     @Data public static class CreateProductRequest {
@@ -85,5 +87,66 @@ public class Dto {
         private java.util.List<ProductResponse> lowStockProducts;
         private java.util.List<ProductResponse> expiringProducts;
         private java.util.List<ProductResponse> allProducts;
+    }
+
+    // ── Admin (solo OWNER) ───────────────────────────────────────────────────
+
+    @Data @Builder
+    public static class RbacMatrixResponse {
+        private java.util.List<AdminRoleDto> roles;
+        private java.util.List<AdminModuleDto> modules;
+        private java.util.List<RoleModuleCellDto> permissions;
+    }
+
+    @Data @Builder
+    public static class AdminRoleDto {
+        private Long id;
+        private String name;
+    }
+
+    @Data @Builder
+    public static class AdminModuleDto {
+        private Long id;
+        private String name;
+        private String key;
+    }
+
+    @Data @Builder
+    public static class RoleModuleCellDto {
+        private Long roleId;
+        private Long moduleId;
+        private boolean canCreate;
+        private boolean canRead;
+        private boolean canUpdate;
+        private boolean canDelete;
+    }
+
+    @Data
+    public static class RbacBatchUpdateRequest {
+        @NotEmpty private java.util.List<RoleModuleCellDto> cells;
+    }
+
+    @Data @Builder
+    public static class AdminUserRowDto {
+        private String id;
+        private String email;
+        private String name;
+        private String whatsappNumber;
+        private Long roleId;
+        private String roleName;
+    }
+
+    @Data
+    public static class AdminCreateUserRequest {
+        @NotBlank @Email private String email;
+        @NotBlank @Size(min = 6) private String password;
+        @NotBlank private String name;
+        @NotNull private Long roleId;
+        private String whatsappNumber;
+    }
+
+    @Data
+    public static class AdminUpdateUserRoleRequest {
+        @NotNull private Long roleId;
     }
 }

@@ -43,10 +43,11 @@ public class JwtService {
         }
     }
 
-    public String generate(String userId, String email) {
+    public String generate(String userId, String email, String roleName) {
         return Jwts.builder()
                 .subject(userId)
                 .claim("email", email)
+                .claim("role", roleName)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(key())
