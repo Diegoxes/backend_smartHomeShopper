@@ -1,8 +1,11 @@
 package com.smarthome.repository;
 
 import com.smarthome.entity.RoleModule;
-import com.smarthome.entity.RoleModuleId;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface RoleModuleRepository extends JpaRepository<RoleModule, RoleModuleId> {
+import java.util.Optional;
+
+public interface RoleModuleRepository extends JpaRepository<RoleModule, Long> {
+
+    Optional<RoleModule> findByRole_IdAndModule_Id(Long roleId, Long moduleId);
 }

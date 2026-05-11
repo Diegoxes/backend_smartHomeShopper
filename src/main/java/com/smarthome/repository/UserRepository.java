@@ -10,7 +10,7 @@ import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, String> {
 
-    @Query("SELECT DISTINCT u FROM User u JOIN FETCH u.role r LEFT JOIN FETCH r.roleModules rm LEFT JOIN FETCH rm.module WHERE u.id = :id")
+    @Query("SELECT DISTINCT u FROM User u LEFT JOIN FETCH u.role r LEFT JOIN FETCH r.roleModules rm LEFT JOIN FETCH rm.module WHERE u.id = :id")
     Optional<User> findByIdWithRbac(@Param("id") String id);
 
     @Modifying
@@ -29,6 +29,6 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     long countByRole_Name(String roleName);
 
-    @Query("SELECT DISTINCT u FROM User u JOIN FETCH u.role ORDER BY LOWER(u.email)")
+    @Query("SELECT DISTINCT u FROM User u LEFT JOIN FETCH u.role ORDER BY LOWER(u.email)")
     java.util.List<User> findAllWithRole();
 }

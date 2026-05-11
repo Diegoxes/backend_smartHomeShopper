@@ -3,23 +3,27 @@ package com.smarthome.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+/**
+ * Permisos por rol y módulo. Clave sustituta {@code id} para evitar fallos de Hibernate 6 con {@code @EmbeddedId}/{@code @MapsId} al persistir.
+ */
 @Entity
-@Table(name = "role_modules")
+@Table(
+        name = "role_modules",
+        uniqueConstraints = @UniqueConstraint(name = "uk_role_module_pair", columnNames = {"role_id", "module_id"}))
 @Getter
 @Setter
 @NoArgsConstructor
 public class RoleModule {
 
-    @EmbeddedId
-    private RoleModuleId id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("roleId")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("moduleId")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "module_id", nullable = false)
     private AppModule module;
 

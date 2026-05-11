@@ -29,8 +29,12 @@ public class User {
     @Column(name = "whatsapp_number")
     private String whatsappNumber;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "role_id", nullable = false)
+    /**
+     * Nullable en BD para que Hibernate pueda hacer {@code ALTER ADD COLUMN} con filas ya existentes;
+     * el arranque asigna rol MEMBER a quien tenga {@code role_id} nulo.
+     */
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "role_id", nullable = true)
     private Role role;
 
     @Column(name = "created_at")

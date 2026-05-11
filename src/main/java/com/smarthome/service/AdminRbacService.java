@@ -4,7 +4,6 @@ import com.smarthome.dto.Dto;
 import com.smarthome.entity.AppModule;
 import com.smarthome.entity.Role;
 import com.smarthome.entity.RoleModule;
-import com.smarthome.entity.RoleModuleId;
 import com.smarthome.repository.AppModuleRepository;
 import com.smarthome.repository.RoleModuleRepository;
 import com.smarthome.repository.RoleRepository;
@@ -69,8 +68,8 @@ public class AdminRbacService {
     @Transactional
     public void updatePermissionsBatch(List<Dto.RoleModuleCellDto> cells) {
         for (Dto.RoleModuleCellDto cell : cells) {
-            RoleModuleId id = new RoleModuleId(cell.getRoleId(), cell.getModuleId());
-            RoleModule rm = roleModuleRepository.findById(id)
+            RoleModule rm = roleModuleRepository
+                    .findByRole_IdAndModule_Id(cell.getRoleId(), cell.getModuleId())
                     .orElseThrow(() -> new RuntimeException(
                             "Combinación rol/módulo no encontrada: " + cell.getRoleId() + " / " + cell.getModuleId()));
             rm.setCanCreate(cell.isCanCreate());

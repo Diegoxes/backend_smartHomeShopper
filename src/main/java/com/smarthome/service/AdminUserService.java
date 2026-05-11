@@ -33,8 +33,8 @@ public class AdminUserService {
                         .email(u.getEmail())
                         .name(u.getName())
                         .whatsappNumber(u.getWhatsappNumber())
-                        .roleId(u.getRole().getId())
-                        .roleName(u.getRole().getName())
+                        .roleId(u.getRole() != null ? u.getRole().getId() : null)
+                        .roleName(u.getRole() != null ? u.getRole().getName() : null)
                         .build())
                 .toList();
     }
@@ -75,7 +75,8 @@ public class AdminUserService {
         User target = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if ("OWNER".equals(target.getRole().getName()) && !"OWNER".equals(newRole.getName())) {
+        String previousRoleName = target.getRole() != null ? target.getRole().getName() : null;
+        if ("OWNER".equals(previousRoleName) && !"OWNER".equals(newRole.getName())) {
             if (userRepository.countByRole_Name("OWNER") <= 1) {
                 throw new RuntimeException("Forbidden: debe existir al menos un usuario con rol OWNER");
             }

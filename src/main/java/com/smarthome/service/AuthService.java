@@ -59,6 +59,8 @@ public class AuthService {
                 .orElseThrow(() -> new RuntimeException("Invalid credentials"));
         if (!passwordEncoder.matches(req.getPassword(), user.getPassword()))
             throw new RuntimeException("Invalid credentials");
+        if (user.getRole() == null)
+            throw new RuntimeException("Cuenta sin rol asignado; espera a que el sistema termine de actualizar o contacta al administrador.");
 
         String token = jwtService.generate(user.getId(), user.getEmail(), user.getRole().getName());
         return Dto.AuthResponse.builder()
