@@ -47,4 +47,9 @@ logging:
     com.smarthome: DEBUG
     org.springframework.security: WARN
 
+# Mantenimiento: al activarlo (o desde panel OWNER), solo usuarios con rol OWNER pueden usar la API.
+app:
+  maintenance:
+    enabled: ${APP_MAINTENANCE_ENABLED:false}
+
 # CORS: el backend acepta cualquier origen (configuración permisiva; restringe en prod si lo necesitas).

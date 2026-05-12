@@ -1,15 +1,9 @@
 package com.smarthome.config;
 
-import com.smarthome.service.JwtService;
-import com.smarthome.service.UserPermissionService;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -19,7 +13,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -33,8 +26,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtService jwtService;
-    private final UserPermissionService userPermissionService;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final MaintenanceFilter maintenanceFilter;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -44,38 +37,14 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/health", "/auth/**", "/webhook/**").permitAll()
+                        .requestMatchers("/health", "/webhook/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/auth/maintenance").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/register").permitAll()
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtFilter(), UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(maintenanceFilter, JwtAuthenticationFilter.class)
                 .build();
-    }
-
-    @Bean
-    OncePerRequestFilter jwtFilter() {
-        return new OncePerRequestFilter() {
-            @Override
-            protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
-                    throws java.io.IOException, jakarta.servlet.ServletException {
-                String header = req.getHeader("Authorization");
-                if (header != null && header.startsWith("Bearer ")) {
-                    String token = header.substring(7);
-                    if (jwtService.isValid(token)) {
-                        String userId = jwtService.extractUserId(token);
-                        var authorities = userPermissionService.loadAuthorities(userId);
-                        if (!authorities.isEmpty()) {
-                            var auth = new UsernamePasswordAuthenticationToken(
-                                    userId,
-                                    null,
-                                    authorities);
-                            org.springframework.security.core.context.SecurityContextHolder
-                                    .getContext().setAuthentication(auth);
-                        }
-                    }
-                }
-                chain.doFilter(req, res);
-            }
-        };
     }
 
     @Bean

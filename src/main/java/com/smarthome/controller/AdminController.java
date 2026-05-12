@@ -1,5 +1,6 @@
 package com.smarthome.controller;
 
+import com.smarthome.config.MaintenanceState;
 import com.smarthome.dto.Dto;
 import com.smarthome.service.AdminRbacService;
 import com.smarthome.service.AdminUserService;
@@ -10,6 +11,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/admin")
@@ -19,6 +21,7 @@ public class AdminController {
 
     private final AdminRbacService adminRbacService;
     private final AdminUserService adminUserService;
+    private final MaintenanceState maintenanceState;
 
     @GetMapping("/rbac")
     public Dto.RbacMatrixResponse getRbac() {
@@ -46,6 +49,17 @@ public class AdminController {
             @PathVariable String id,
             @Valid @RequestBody Dto.AdminUpdateUserRoleRequest req) {
         adminUserService.updateUserRole(id, req);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/maintenance")
+    public Map<String, Boolean> getMaintenance() {
+        return Map.of("enabled", maintenanceState.isEnabled());
+    }
+
+    @PutMapping("/maintenance")
+    public ResponseEntity<Void> setMaintenance(@Valid @RequestBody Dto.MaintenanceToggleRequest body) {
+        maintenanceState.setEnabled(body.isEnabled());
         return ResponseEntity.ok().build();
     }
 }

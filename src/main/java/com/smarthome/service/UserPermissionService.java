@@ -1,5 +1,6 @@
 package com.smarthome.service;
 
+import com.smarthome.dto.Dto;
 import com.smarthome.entity.Role;
 import com.smarthome.entity.RoleModule;
 import com.smarthome.entity.User;
@@ -52,6 +53,36 @@ public class UserPermissionService {
             if (rm.isCanDelete()) {
                 out.add(new SimpleGrantedAuthority(key + "_DELETE"));
             }
+        }
+        return out;
+    }
+
+    public java.util.List<Dto.ModulePermissionDto> modulePermissionsForUser(String userId) {
+        return userRepository.findByIdWithRbac(userId)
+                .map(this::modulePermissionsFromUser)
+                .orElse(List.of());
+    }
+
+    public java.util.List<Dto.ModulePermissionDto> modulePermissionsFromUser(User user) {
+        if (user.getRole() == null) {
+            return List.of();
+        }
+        List<RoleModule> rms = user.getRole().getRoleModules();
+        if (rms == null) {
+            return List.of();
+        }
+        java.util.List<Dto.ModulePermissionDto> out = new ArrayList<>();
+        for (RoleModule rm : rms) {
+            if (rm.getModule() == null) {
+                continue;
+            }
+            out.add(Dto.ModulePermissionDto.builder()
+                    .key(rm.getModule().getKey())
+                    .canCreate(rm.isCanCreate())
+                    .canRead(rm.isCanRead())
+                    .canUpdate(rm.isCanUpdate())
+                    .canDelete(rm.isCanDelete())
+                    .build());
         }
         return out;
     }

@@ -5,6 +5,7 @@ import com.smarthome.service.ProductService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,16 +19,19 @@ public class ProductController {
     private final ProductService productService;
 
     @GetMapping
+    @PreAuthorize("hasAuthority('INVENTORY_READ') or hasAuthority('REPORTS_READ')")
     public List<Dto.ProductResponse> list(@AuthenticationPrincipal String userId) {
         return productService.getAllByUser(userId);
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('INVENTORY_READ')")
     public Dto.ProductResponse get(@PathVariable String id, @AuthenticationPrincipal String userId) {
         return productService.getById(id, userId);
     }
 
     @PostMapping
+    @PreAuthorize("hasAuthority('INVENTORY_CREATE')")
     public ResponseEntity<Dto.ProductResponse> create(
             @AuthenticationPrincipal String userId,
             @Valid @RequestBody Dto.CreateProductRequest req) {
@@ -35,6 +39,7 @@ public class ProductController {
     }
 
     @PatchMapping("/{id}")
+    @PreAuthorize("hasAuthority('INVENTORY_UPDATE')")
     public Dto.ProductResponse update(
             @PathVariable String id,
             @AuthenticationPrincipal String userId,
@@ -43,6 +48,7 @@ public class ProductController {
     }
 
     @PostMapping("/{id}/consume")
+    @PreAuthorize("hasAuthority('INVENTORY_UPDATE')")
     public Dto.ProductResponse consume(
             @PathVariable String id,
             @AuthenticationPrincipal String userId,
@@ -51,6 +57,7 @@ public class ProductController {
     }
 
     @PostMapping("/{id}/restock")
+    @PreAuthorize("hasAuthority('INVENTORY_UPDATE')")
     public Dto.ProductResponse restock(
             @PathVariable String id,
             @AuthenticationPrincipal String userId,
@@ -59,6 +66,7 @@ public class ProductController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('INVENTORY_DELETE')")
     public ResponseEntity<Void> delete(@PathVariable String id, @AuthenticationPrincipal String userId) {
         productService.delete(id, userId);
         return ResponseEntity.noContent().build();

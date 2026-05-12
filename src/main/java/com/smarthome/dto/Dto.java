@@ -27,6 +27,31 @@ public class Dto {
         private String email;
         /** Uno de: OWNER, MANAGER, MEMBER, VIEWER */
         private String role;
+        /** Permisos por módulo (clave = key del módulo, p. ej. INVENTORY). */
+        private java.util.List<ModulePermissionDto> permissions;
+    }
+
+    @Data @Builder
+    public static class ModulePermissionDto {
+        private String key;
+        private boolean canCreate;
+        private boolean canRead;
+        private boolean canUpdate;
+        private boolean canDelete;
+    }
+
+    @Data @Builder
+    public static class AuthMeResponse {
+        private String userId;
+        private String name;
+        private String email;
+        private String role;
+        private java.util.List<ModulePermissionDto> permissions;
+    }
+
+    @Data
+    public static class MaintenanceToggleRequest {
+        private boolean enabled;
     }
 
     @Data public static class CreateProductRequest {

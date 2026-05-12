@@ -21,6 +21,7 @@ public class AuthService {
     private final RoleRepository roleRepo;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final UserPermissionService userPermissionService;
 
     /** Misma forma de guardar y buscar el email (evita fallos login por mayúsculas / espacios). */
     private static String normalizeEmail(String email) { 
@@ -43,12 +44,15 @@ public class AuthService {
                 .role(defaultRole)
                 .build();
         userRepo.save(user);
+        User full = userRepo.findByIdWithRbac(user.getId())
+                .orElseThrow(() -> new IllegalStateException("Usuario recién creado no encontrado"));
 
-        String token = jwtService.generate(user.getId(), user.getEmail(), user.getRole().getName());
+        String token = jwtService.generate(full.getId(), full.getEmail(), full.getRole().getName());
         return Dto.AuthResponse.builder()
-                .token(token).userId(user.getId())
-                .name(user.getName()).email(user.getEmail())
-                .role(user.getRole().getName())
+                .token(token).userId(full.getId())
+                .name(full.getName()).email(full.getEmail())
+                .role(full.getRole().getName())
+                .permissions(userPermissionService.modulePermissionsFromUser(full))
                 .build();
     }
 
@@ -59,14 +63,32 @@ public class AuthService {
                 .orElseThrow(() -> new RuntimeException("Invalid credentials"));
         if (!passwordEncoder.matches(req.getPassword(), user.getPassword()))
             throw new RuntimeException("Invalid credentials");
-        if (user.getRole() == null)
+        User full = userRepo.findByIdWithRbac(user.getId())
+                .orElseThrow(() -> new RuntimeException("Invalid credentials"));
+        if (full.getRole() == null)
             throw new RuntimeException("Cuenta sin rol asignado; espera a que el sistema termine de actualizar o contacta al administrador.");
 
-        String token = jwtService.generate(user.getId(), user.getEmail(), user.getRole().getName());
+        String token = jwtService.generate(full.getId(), full.getEmail(), full.getRole().getName());
         return Dto.AuthResponse.builder()
-                .token(token).userId(user.getId())
-                .name(user.getName()).email(user.getEmail())
+                .token(token).userId(full.getId())
+                .name(full.getName()).email(full.getEmail())
+                .role(full.getRole().getName())
+                .permissions(userPermissionService.modulePermissionsFromUser(full))
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public Dto.AuthMeResponse me(String userId) {
+        User user = userRepo.findByIdWithRbac(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        if (user.getRole() == null)
+            throw new RuntimeException("Cuenta sin rol asignado; contacta al administrador.");
+        return Dto.AuthMeResponse.builder()
+                .userId(user.getId())
+                .name(user.getName())
+                .email(user.getEmail())
                 .role(user.getRole().getName())
+                .permissions(userPermissionService.modulePermissionsFromUser(user))
                 .build();
     }
 }
