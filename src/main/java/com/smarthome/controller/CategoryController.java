@@ -3,11 +3,12 @@ package com.smarthome.controller;
 import com.smarthome.dto.Dto;
 import com.smarthome.entity.Category;
 import com.smarthome.service.CategoryService;
-import com.smarthome.service.UserPermissionService;
+import com.smarthome.service.OrganizationContextService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,12 +20,12 @@ import java.util.stream.Collectors;
 public class CategoryController {
 
     private final CategoryService categoryService;
-    private final UserPermissionService userPermissionService;
+    private final OrganizationContextService orgContext;
 
     @GetMapping
-    public ResponseEntity<List<Dto.CategoryResponse>> getAll(Authentication auth) {
-        String userId = auth.getName();
-        String orgId = userPermissionService.requireOrgId(userId);
+    @PreAuthorize("hasAuthority('INVENTORY_READ')")
+    public ResponseEntity<List<Dto.CategoryResponse>> getAll(@AuthenticationPrincipal String userId) {
+        String orgId = orgContext.requireOrgId();
 
         List<Category> categories = categoryService.getAllByOrganization(orgId);
 
@@ -42,13 +43,12 @@ public class CategoryController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAuthority('INVENTORY_CREATE')")
     public ResponseEntity<Dto.CategoryResponse> create(
             @Valid @RequestBody Dto.CreateCategoryRequest req,
-            Authentication auth
+            @AuthenticationPrincipal String userId
     ) {
-        String userId = auth.getName();
-        String orgId = userPermissionService.requireOrgId(userId);
-        userPermissionService.checkPermission(userId, "INVENTORY", "CREATE");
+        String orgId = orgContext.requireOrgId();
 
         Category category = categoryService.create(
                 orgId,
@@ -69,11 +69,9 @@ public class CategoryController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable String id, Authentication auth) {
-        String userId = auth.getName();
-        String orgId = userPermissionService.requireOrgId(userId);
-        userPermissionService.checkPermission(userId, "INVENTORY", "DELETE");
-
+    @PreAuthorize("hasAuthority('INVENTORY_DELETE')")
+    public ResponseEntity<Void> delete(@PathVariable String id, @AuthenticationPrincipal String userId) {
+        String orgId = orgContext.requireOrgId();
         categoryService.delete(id, orgId);
         return ResponseEntity.noContent().build();
     }
