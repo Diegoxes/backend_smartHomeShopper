@@ -86,6 +86,7 @@ public class ProductService {
                 .purchaseUnit(req.getPurchaseUnit() != null ? req.getPurchaseUnit() : req.getUnit())
                 .unitsPerPurchaseUnit(req.getUnitsPerPurchaseUnit() != null ? req.getUnitsPerPurchaseUnit() : 1.0)
                 .build();
+        applyUnitCost(p, req.getUnitCost());
         p = productRepo.save(p);
         syncDefaultStockLevel(orgId, p);
         return toResponse(p, alertDaysForOrg(orgId));
@@ -110,6 +111,7 @@ public class ProductService {
         if (req.getExpiryDate() != null) p.setExpiryDate(req.getExpiryDate());
         if (req.getCategory() != null) p.setCategory(req.getCategory());
         if (req.getSalePrice() != null) p.setSalePrice(req.getSalePrice());
+        if (req.getUnitCost() != null) applyUnitCost(p, req.getUnitCost());
         if (req.getPurchaseUnit() != null) p.setPurchaseUnit(req.getPurchaseUnit());
         if (req.getUnitsPerPurchaseUnit() != null) p.setUnitsPerPurchaseUnit(req.getUnitsPerPurchaseUnit());
         return toResponse(productRepo.save(p), alertDaysForOrg(orgId));
@@ -271,6 +273,12 @@ public class ProductService {
         double factor = p.getUnitsPerPurchaseUnit() != null && p.getUnitsPerPurchaseUnit() > 0
                 ? p.getUnitsPerPurchaseUnit() : 1.0;
         return purchaseQty * factor;
+    }
+
+    private void applyUnitCost(Product p, BigDecimal unitCost) {
+        if (unitCost == null) return;
+        p.setLastCost(unitCost);
+        p.setAvgCost(unitCost);
     }
 
     private void updateCostsOnRestock(Product p, BigDecimal unitPrice, double stockUnits) {

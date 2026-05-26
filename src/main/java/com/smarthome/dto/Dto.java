@@ -96,6 +96,7 @@ public class Dto {
         private String barcode;
         private String category;
         private String imageUrl;
+        private java.math.BigDecimal unitCost;
         private java.math.BigDecimal salePrice;
         private Product.UnitType purchaseUnit;
         private Double unitsPerPurchaseUnit;
@@ -111,6 +112,7 @@ public class Dto {
         private Double consumptionPerUse;
         private LocalDate expiryDate;
         private String category;
+        private java.math.BigDecimal unitCost;
         private java.math.BigDecimal salePrice;
         private Product.UnitType purchaseUnit;
         private Double unitsPerPurchaseUnit;
