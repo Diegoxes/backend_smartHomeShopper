@@ -490,5 +490,22 @@ public class Dto {
         private String format;
         private String message;
     }
+
+    // ── Category ──────────────────────────────────────────────────────────────────
+    @Data
+    public static class CreateCategoryRequest {
+        @NotBlank private String name;
+        private String description;
+        private String colorHex;
+    }
+
+    @Data @Builder
+    public static class CategoryResponse {
+        private String id;
+        private String name;
+        private String description;
+        private String colorHex;
+        private String createdAt;
+    }
 }
 
