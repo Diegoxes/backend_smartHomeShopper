@@ -39,7 +39,7 @@ public class RbacSeedService {
     }
 
     private void repairRoleModules() {
-        Role owner = roleRepository.findByName("PLATFORM_OWNER")
+        roleRepository.findByName("PLATFORM_OWNER")
                 .orElseGet(() -> roleRepository.save(Role.builder().name("PLATFORM_OWNER").build()));
         Role manager = roleRepository.findByName("MANAGER")
                 .orElseGet(() -> roleRepository.save(Role.builder().name("MANAGER").build()));
@@ -53,9 +53,6 @@ public class RbacSeedService {
         AppModule rep = ensureModule("Informes", "REPORTS");
         AppModule usr = ensureModule("Usuarios", "USERS");
 
-        for (AppModule m : new AppModule[] { inv, pur, rep, usr }) {
-            grant(owner, m, true, true, true, true);
-        }
         grant(manager, inv, true, true, true, true);
         grant(manager, pur, true, true, true, true);
         grant(manager, rep, true, true, true, true);
@@ -76,7 +73,7 @@ public class RbacSeedService {
     }
 
     private void seedRolesAndModules() {
-        Role owner = roleRepository.save(Role.builder().name("PLATFORM_OWNER").build());
+        roleRepository.save(Role.builder().name("PLATFORM_OWNER").build());
         Role manager = roleRepository.save(Role.builder().name("MANAGER").build());
         Role member = roleRepository.save(Role.builder().name("MEMBER").build());
         Role viewer = roleRepository.save(Role.builder().name("VIEWER").build());
@@ -90,9 +87,6 @@ public class RbacSeedService {
         AppModule usr = moduleRepository.save(
                 AppModule.builder().name("Usuarios").key("USERS").build());
 
-        for (AppModule m : new AppModule[] { inv, pur, rep, usr }) {
-            grant(owner, m, true, true, true, true);
-        }
         grant(manager, inv, true, true, true, true);
         grant(manager, pur, true, true, true, true);
         grant(manager, rep, true, true, true, true);

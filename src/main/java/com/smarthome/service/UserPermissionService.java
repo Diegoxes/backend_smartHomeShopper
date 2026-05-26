@@ -26,8 +26,7 @@ public class UserPermissionService {
 
         if (session.isPlatformOwner()) {
             out.add(new SimpleGrantedAuthority("ROLE_PLATFORM_OWNER"));
-            roleRepository.findByNameWithRoleModules("PLATFORM_OWNER")
-                    .ifPresent(r -> appendModuleAuthorities(out, r));
+            return out;
         }
 
         if (session.orgRole() != null) {
@@ -65,7 +64,10 @@ public class UserPermissionService {
 
     @Transactional(readOnly = true)
     public List<Dto.ModulePermissionDto> modulePermissionsForSession(SessionPrincipal session) {
-        String roleName = session.isPlatformOwner() ? "PLATFORM_OWNER" : session.orgRole();
+        if (session.isPlatformOwner()) {
+            return List.of();
+        }
+        String roleName = session.orgRole();
         if (roleName == null) {
             return userRepository.findByIdWithRbac(session.userId())
                     .map(this::modulePermissionsFromUser)

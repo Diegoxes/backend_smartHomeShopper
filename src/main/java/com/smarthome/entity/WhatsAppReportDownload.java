@@ -26,8 +26,8 @@ public class WhatsAppReportDownload {
     @Column(name = "content_type", nullable = false, length = 128)
     private String contentType;
 
-    @Lob
-    @Column(name = "data", nullable = false)
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "data", nullable = false, columnDefinition = "bytea")
     private byte[] data;
 
     @Column(name = "expires_at", nullable = false)

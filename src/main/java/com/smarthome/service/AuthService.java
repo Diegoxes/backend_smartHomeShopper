@@ -62,16 +62,16 @@ public class AuthService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
         Optional<OrganizationMember> membership = memberRepo.findByUserId(userId);
         String platformRole = user.getRole() != null ? user.getRole().getName() : null;
-        String orgRole = membership.map(m -> m.getOrgRole().name()).orElse(null);
-        String orgId = membership.map(m -> m.getOrganization().getId()).orElse(null);
-        String orgStatus = membership.map(m -> m.getOrganization().getStatus().name()).orElse(null);
+        boolean isPlatformOwner = "PLATFORM_OWNER".equals(platformRole);
+        String orgRole = isPlatformOwner ? null : membership.map(m -> m.getOrgRole().name()).orElse(null);
+        String orgId = isPlatformOwner ? null : membership.map(m -> m.getOrganization().getId()).orElse(null);
+        String orgStatus = isPlatformOwner ? null : membership.map(m -> m.getOrganization().getStatus().name()).orElse(null);
         String displayRole = platformRole != null ? platformRole : (orgRole != null ? orgRole : "PENDING");
 
         // Permisos si la org no está rechazada (ACTIVE o PENDING pueden operar)
         SessionPrincipal session = new SessionPrincipal(userId, orgId, orgRole, platformRole);
         boolean orgRejected = "REJECTED".equals(orgStatus);
-        boolean grantPermissions = "PLATFORM_OWNER".equals(platformRole)
-                || (orgId != null && !orgRejected);
+        boolean grantPermissions = isPlatformOwner || (orgId != null && !orgRejected);
 
         return Dto.AuthMeResponse.builder()
                 .userId(user.getId())
@@ -93,16 +93,16 @@ public class AuthService {
         Optional<OrganizationMember> membership = memberRepo.findByUserId(full.getId());
 
         String platformRole = full.getRole() != null ? full.getRole().getName() : null;
-        String orgId = membership.map(m -> m.getOrganization().getId()).orElse(null);
-        String orgRole = membership.map(m -> m.getOrgRole().name()).orElse(null);
-        String orgStatus = membership.map(m -> m.getOrganization().getStatus().name()).orElse(null);
+        boolean isPlatformOwner = "PLATFORM_OWNER".equals(platformRole);
+        String orgId = isPlatformOwner ? null : membership.map(m -> m.getOrganization().getId()).orElse(null);
+        String orgRole = isPlatformOwner ? null : membership.map(m -> m.getOrgRole().name()).orElse(null);
+        String orgStatus = isPlatformOwner ? null : membership.map(m -> m.getOrganization().getStatus().name()).orElse(null);
         String displayRole = platformRole != null ? platformRole : (orgRole != null ? orgRole : "PENDING");
 
         String token = jwtService.generate(full.getId(), full.getEmail(), platformRole, orgId, orgRole);
         SessionPrincipal session = new SessionPrincipal(full.getId(), orgId, orgRole, platformRole);
         boolean orgRejected = "REJECTED".equals(orgStatus);
-        boolean grantPermissions = "PLATFORM_OWNER".equals(platformRole)
-                || (orgId != null && !orgRejected);
+        boolean grantPermissions = isPlatformOwner || (orgId != null && !orgRejected);
 
         return Dto.AuthResponse.builder()
                 .token(token)

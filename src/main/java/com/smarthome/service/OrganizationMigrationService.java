@@ -48,6 +48,9 @@ public class OrganizationMigrationService {
 
         List<User> users = userRepository.findAll();
         for (User user : users) {
+            if (user.getRole() != null && "PLATFORM_OWNER".equals(user.getRole().getName())) {
+                continue;
+            }
             if (memberRepository.findByUserId(user.getId()).isPresent()) {
                 continue;
             }
