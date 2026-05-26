@@ -34,7 +34,11 @@ public class InventoryReportInsightsService {
 
     @Transactional(readOnly = true)
     public Dto.RotationReportDto rotation(String userId, LocalDate from, LocalDate to) {
-        String orgId = orgContext.requireOrgId();
+        return rotationForOrg(orgContext.requireOrgId(), from, to);
+    }
+
+    @Transactional(readOnly = true)
+    public Dto.RotationReportDto rotationForOrg(String orgId, LocalDate from, LocalDate to) {
         LocalDate end = to != null ? to : LocalDate.now();
         LocalDate start = from != null ? from : end.minusDays(horizonDays(orgId));
         LocalDateTime fromDt = start.atStartOfDay();

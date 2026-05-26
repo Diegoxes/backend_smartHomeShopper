@@ -58,6 +58,7 @@ logging:
 app:
   maintenance:
     enabled: ${APP_MAINTENANCE_ENABLED:false}
+  public-base-url: ${APP_PUBLIC_BASE_URL:}
   features:
     ai:
       enabled: ${APP_FEATURES_AI_ENABLED:false}

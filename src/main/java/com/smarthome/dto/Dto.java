@@ -373,8 +373,15 @@ public class Dto {
         private String email;
         private String name;
         private String whatsappNumber;
+        /** Id del rol en tabla roles (plantilla RBAC) — refleja rol plataforma u org */
         private Long roleId;
         private String roleName;
+        /** Rol de plataforma en users.role_id (solo PLATFORM_OWNER) */
+        private String platformRole;
+        /** Rol dentro de la organización */
+        private String orgRole;
+        private String organizationId;
+        private String organizationName;
     }
 
     @Data
@@ -384,11 +391,15 @@ public class Dto {
         @NotBlank private String name;
         @NotNull private Long roleId;
         private String whatsappNumber;
+        /** Obligatorio si roleId es MANAGER, MEMBER o VIEWER */
+        private String organizationId;
     }
 
     @Data
     public static class AdminUpdateUserRoleRequest {
         @NotNull private Long roleId;
+        /** Obligatorio al asignar rol org si el usuario aún no tiene organización */
+        private String organizationId;
     }
 
     // ── Alias de productos ────────────────────────────────────────────────────
