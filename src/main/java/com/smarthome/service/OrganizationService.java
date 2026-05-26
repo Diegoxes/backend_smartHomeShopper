@@ -37,6 +37,7 @@ public class OrganizationService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
+        // Org se crea en estado PENDING hasta que el PLATFORM_OWNER la apruebe
         Organization org = organizationRepository.save(Organization.builder()
                 .name(req.getName().trim())
                 .industry(req.getIndustry())
@@ -44,14 +45,14 @@ public class OrganizationService {
                 .country(req.getCountry())
                 .timezone(req.getTimezone() != null ? req.getTimezone() : "America/Mexico_City")
                 .maxMembers(20)
+                .status(Organization.Status.PENDING)
                 .build());
 
-        OrganizationSettings settings = settingsRepository.save(OrganizationSettings.builder()
+        settingsRepository.save(OrganizationSettings.builder()
                 .organization(org)
                 .expiryAlertDays(7)
                 .predictionHorizonDays(30)
                 .build());
-        org.setSettings(settings);
 
         memberRepository.save(OrganizationMember.builder()
                 .organization(org)
@@ -59,14 +60,8 @@ public class OrganizationService {
                 .orgRole(OrganizationMember.OrgRole.MANAGER)
                 .build());
 
-        warehouseRepository.save(Warehouse.builder()
-                .organization(org)
-                .name("Principal")
-                .isDefault(true)
-                .build());
-
+        // El JWT refleja que ya tiene org pero aún está pendiente
         String token = jwtService.generate(userId, user.getEmail(), null, org.getId(), "MANAGER");
-        SessionPrincipal session = new SessionPrincipal(userId, org.getId(), "MANAGER", null);
         return Dto.AuthResponse.builder()
                 .token(token)
                 .userId(userId)
@@ -75,9 +70,34 @@ public class OrganizationService {
                 .role("MANAGER")
                 .orgRole("MANAGER")
                 .orgId(org.getId())
+                .orgStatus("PENDING")
                 .needsOnboarding(false)
-                .permissions(userPermissionService.modulePermissionsForSession(session))
+                .permissions(List.of())
                 .build();
+    }
+
+    /** Activa la organización una vez aprobada: crea el almacén y habilita permisos. */
+    public void activateOrg(String orgId) {
+        Organization org = organizationRepository.findById(orgId)
+                .orElseThrow(() -> new RuntimeException("Organización no encontrada"));
+        org.setStatus(Organization.Status.ACTIVE);
+        organizationRepository.save(org);
+
+        boolean hasWarehouse = !warehouseRepository.findByOrganizationIdOrderByNameAsc(orgId).isEmpty();
+        if (!hasWarehouse) {
+            warehouseRepository.save(Warehouse.builder()
+                    .organization(org)
+                    .name("Principal")
+                    .isDefault(true)
+                    .build());
+        }
+    }
+
+    public void rejectOrg(String orgId) {
+        Organization org = organizationRepository.findById(orgId)
+                .orElseThrow(() -> new RuntimeException("Organización no encontrada"));
+        org.setStatus(Organization.Status.REJECTED);
+        organizationRepository.save(org);
     }
 
     @Transactional(readOnly = true)

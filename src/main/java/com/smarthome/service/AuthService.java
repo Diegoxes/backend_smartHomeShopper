@@ -9,6 +9,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -63,9 +64,13 @@ public class AuthService {
         String platformRole = user.getRole() != null ? user.getRole().getName() : null;
         String orgRole = membership.map(m -> m.getOrgRole().name()).orElse(null);
         String orgId = membership.map(m -> m.getOrganization().getId()).orElse(null);
+        String orgStatus = membership.map(m -> m.getOrganization().getStatus().name()).orElse(null);
         String displayRole = platformRole != null ? platformRole : (orgRole != null ? orgRole : "PENDING");
 
+        // Solo dar permisos si la org está ACTIVE (o si es PLATFORM_OWNER)
         SessionPrincipal session = new SessionPrincipal(userId, orgId, orgRole, platformRole);
+        boolean orgActive = "ACTIVE".equals(orgStatus) || "PLATFORM_OWNER".equals(platformRole);
+
         return Dto.AuthMeResponse.builder()
                 .userId(user.getId())
                 .name(user.getName())
@@ -74,8 +79,9 @@ public class AuthService {
                 .platformRole(platformRole)
                 .orgRole(orgRole)
                 .orgId(orgId)
+                .orgStatus(orgStatus)
                 .needsOnboarding(orgId == null && !"PLATFORM_OWNER".equals(platformRole))
-                .permissions(userPermissionService.modulePermissionsForSession(session))
+                .permissions(orgActive ? userPermissionService.modulePermissionsForSession(session) : List.of())
                 .build();
     }
 
@@ -87,10 +93,12 @@ public class AuthService {
         String platformRole = full.getRole() != null ? full.getRole().getName() : null;
         String orgId = membership.map(m -> m.getOrganization().getId()).orElse(null);
         String orgRole = membership.map(m -> m.getOrgRole().name()).orElse(null);
+        String orgStatus = membership.map(m -> m.getOrganization().getStatus().name()).orElse(null);
         String displayRole = platformRole != null ? platformRole : (orgRole != null ? orgRole : "PENDING");
 
         String token = jwtService.generate(full.getId(), full.getEmail(), platformRole, orgId, orgRole);
         SessionPrincipal session = new SessionPrincipal(full.getId(), orgId, orgRole, platformRole);
+        boolean orgActive = "ACTIVE".equals(orgStatus) || "PLATFORM_OWNER".equals(platformRole);
 
         return Dto.AuthResponse.builder()
                 .token(token)
@@ -101,8 +109,9 @@ public class AuthService {
                 .platformRole(platformRole)
                 .orgRole(orgRole)
                 .orgId(orgId)
+                .orgStatus(orgStatus)
                 .needsOnboarding(orgId == null && !"PLATFORM_OWNER".equals(platformRole))
-                .permissions(userPermissionService.modulePermissionsForSession(session))
+                .permissions(orgActive ? userPermissionService.modulePermissionsForSession(session) : List.of())
                 .build();
     }
 }

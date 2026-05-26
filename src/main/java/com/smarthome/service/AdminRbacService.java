@@ -25,6 +25,13 @@ public class AdminRbacService {
     private final RoleModuleRepository roleModuleRepository;
 
     @Transactional(readOnly = true)
+    public List<Dto.AdminRoleDto> listRoles() {
+        return roleRepository.findAll(Sort.by("id")).stream()
+                .map(r -> Dto.AdminRoleDto.builder().id(r.getId()).name(r.getName()).build())
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public Dto.RbacMatrixResponse getMatrix() {
         List<Role> roles = roleRepository.findAllWithRoleModules();
         List<AppModule> modules = moduleRepository.findAll(Sort.by("id"));

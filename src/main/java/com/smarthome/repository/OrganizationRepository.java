@@ -8,4 +8,6 @@ import java.util.List;
 public interface OrganizationRepository extends JpaRepository<Organization, String> {
 
     List<Organization> findAllByOrderByNameAsc();
+
+    List<Organization> findAllByStatusOrderByCreatedAtAsc(Organization.Status status);
 }

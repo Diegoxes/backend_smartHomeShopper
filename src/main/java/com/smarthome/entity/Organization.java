@@ -38,8 +38,19 @@ public class Organization {
     @Builder.Default
     private Integer maxMembers = 20;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    @Builder.Default
+    private Status status = Status.PENDING;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+
+    public enum Status { PENDING, ACTIVE, REJECTED }
+
+    public boolean isActive() {
+        return status == Status.ACTIVE;
+    }
 
     @OneToOne(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private OrganizationSettings settings;

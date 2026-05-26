@@ -4,6 +4,7 @@ import com.smarthome.config.MaintenanceState;
 import com.smarthome.dto.Dto;
 import com.smarthome.service.AdminRbacService;
 import com.smarthome.service.AdminUserService;
+import com.smarthome.service.AdminOrgService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -21,11 +22,18 @@ public class AdminController {
 
     private final AdminRbacService adminRbacService;
     private final AdminUserService adminUserService;
+    private final AdminOrgService adminOrgService;
     private final MaintenanceState maintenanceState;
 
     @GetMapping("/rbac")
     public Dto.RbacMatrixResponse getRbac() {
         return adminRbacService.getMatrix();
+    }
+
+    /** Lista todos los roles disponibles (para selects de formularios). */
+    @GetMapping("/roles")
+    public List<Dto.AdminRoleDto> listRoles() {
+        return adminRbacService.listRoles();
     }
 
     @PutMapping("/rbac/permissions")
@@ -60,6 +68,24 @@ public class AdminController {
     @PutMapping("/maintenance")
     public ResponseEntity<Void> setMaintenance(@Valid @RequestBody Dto.MaintenanceToggleRequest body) {
         maintenanceState.setEnabled(body.isEnabled());
+        return ResponseEntity.ok().build();
+    }
+
+    // ===== GESTIÓN DE ORGANIZACIONES =====
+
+    /** Lista todas las organizaciones con el estado indicado (PENDING, ACTIVE, REJECTED). */
+    @GetMapping("/organizations")
+    public List<Dto.PendingOrgDto> listOrganizations(
+            @RequestParam(defaultValue = "PENDING") String status) {
+        return adminOrgService.listByStatus(status);
+    }
+
+    /** Aprobar o rechazar una solicitud de onboarding. */
+    @PostMapping("/organizations/{orgId}/review")
+    public ResponseEntity<Void> reviewOrganization(
+            @PathVariable String orgId,
+            @Valid @RequestBody Dto.OrgApprovalRequest req) {
+        adminOrgService.review(orgId, req);
         return ResponseEntity.ok().build();
     }
 }

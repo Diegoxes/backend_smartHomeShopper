@@ -30,6 +30,8 @@ public class Dto {
         private String platformRole;
         private String orgRole;
         private String orgId;
+        /** PENDING = esperando aprobación, ACTIVE = aprobada, REJECTED = rechazada */
+        private String orgStatus;
         private boolean needsOnboarding;
         private java.util.List<ModulePermissionDto> permissions;
     }
@@ -52,8 +54,29 @@ public class Dto {
         private String platformRole;
         private String orgRole;
         private String orgId;
+        private String orgStatus;
         private boolean needsOnboarding;
         private java.util.List<ModulePermissionDto> permissions;
+    }
+
+    /** Solicitud de onboarding pendiente de aprobación (vista del PLATFORM_OWNER) */
+    @Data @Builder
+    public static class PendingOrgDto {
+        private String orgId;
+        private String orgName;
+        private String industry;
+        private String country;
+        private String orgStatus;
+        private LocalDateTime createdAt;
+        private String managerUserId;
+        private String managerName;
+        private String managerEmail;
+    }
+
+    @Data
+    public static class OrgApprovalRequest {
+        @NotBlank private String action; // "APPROVE" o "REJECT"
+        private String reason;
     }
 
     @Data
