@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,17 +20,20 @@ public class UserPermissionService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
 
+    @Transactional(readOnly = true)
     public List<GrantedAuthority> loadAuthorities(SessionPrincipal session) {
         List<GrantedAuthority> out = new ArrayList<>();
 
         if (session.isPlatformOwner()) {
             out.add(new SimpleGrantedAuthority("ROLE_PLATFORM_OWNER"));
-            roleRepository.findByName("PLATFORM_OWNER").ifPresent(r -> appendModuleAuthorities(out, r));
+            roleRepository.findByNameWithRoleModules("PLATFORM_OWNER")
+                    .ifPresent(r -> appendModuleAuthorities(out, r));
         }
 
         if (session.orgRole() != null) {
             out.add(new SimpleGrantedAuthority("ROLE_ORG_" + session.orgRole()));
-            roleRepository.findByName(session.orgRole()).ifPresent(r -> appendModuleAuthorities(out, r));
+            roleRepository.findByNameWithRoleModules(session.orgRole())
+                    .ifPresent(r -> appendModuleAuthorities(out, r));
         }
 
         if (out.isEmpty()) {
@@ -59,6 +63,7 @@ public class UserPermissionService {
         }
     }
 
+    @Transactional(readOnly = true)
     public List<Dto.ModulePermissionDto> modulePermissionsForSession(SessionPrincipal session) {
         String roleName = session.isPlatformOwner() ? "PLATFORM_OWNER" : session.orgRole();
         if (roleName == null) {
@@ -66,7 +71,7 @@ public class UserPermissionService {
                     .map(this::modulePermissionsFromUser)
                     .orElse(List.of());
         }
-        return roleRepository.findByName(roleName)
+        return roleRepository.findByNameWithRoleModules(roleName)
                 .map(this::modulePermissionsFromRole)
                 .orElse(List.of());
     }

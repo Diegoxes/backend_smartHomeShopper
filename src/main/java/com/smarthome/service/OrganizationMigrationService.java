@@ -57,8 +57,9 @@ public class OrganizationMigrationService {
                     .currency("MXN")
                     .country("MX")
                     .timezone("America/Mexico_City")
-                    .maxMembers(20)
-                    .build());
+                .maxMembers(20)
+                .status(Organization.Status.ACTIVE)
+                .build());
 
             OrganizationSettings settings = OrganizationSettings.builder()
                     .organization(org)

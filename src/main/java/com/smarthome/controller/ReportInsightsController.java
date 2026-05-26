@@ -26,7 +26,7 @@ public class ReportInsightsController {
     private final InventorySnapshotService snapshotService;
 
     @GetMapping("/rotation")
-    @PreAuthorize("hasAuthority('REPORTS_READ')")
+    @PreAuthorize("hasAuthority('REPORTS_READ') or hasAnyRole('ORG_MANAGER','ORG_MEMBER','ORG_VIEWER')")
     public Dto.RotationReportDto rotation(
             @AuthenticationPrincipal String userId,
             @RequestParam(required = false) LocalDate from,
@@ -35,19 +35,19 @@ public class ReportInsightsController {
     }
 
     @GetMapping("/inventory")
-    @PreAuthorize("hasAuthority('REPORTS_READ')")
+    @PreAuthorize("hasAuthority('REPORTS_READ') or hasAnyRole('ORG_MANAGER','ORG_MEMBER','ORG_VIEWER')")
     public Dto.InventoryReportDto inventory(@AuthenticationPrincipal String userId) {
         return reportInsightsService.inventoryOverview(userId);
     }
 
     @GetMapping("/by-category")
-    @PreAuthorize("hasAuthority('REPORTS_READ')")
+    @PreAuthorize("hasAuthority('REPORTS_READ') or hasAnyRole('ORG_MANAGER','ORG_MEMBER','ORG_VIEWER')")
     public List<Dto.CategoryBreakdownDto> byCategory(@AuthenticationPrincipal String userId) {
         return reportInsightsService.byCategory(userId);
     }
 
     @GetMapping("/by-supplier")
-    @PreAuthorize("hasAuthority('REPORTS_READ')")
+    @PreAuthorize("hasAuthority('REPORTS_READ') or hasAnyRole('ORG_MANAGER','ORG_MEMBER','ORG_VIEWER')")
     public List<Dto.SupplierSpendRowDto> bySupplier(
             @AuthenticationPrincipal String userId,
             @RequestParam(required = false) LocalDate from,
@@ -56,7 +56,7 @@ public class ReportInsightsController {
     }
 
     @GetMapping("/by-channel")
-    @PreAuthorize("hasAuthority('REPORTS_READ')")
+    @PreAuthorize("hasAuthority('REPORTS_READ') or hasAnyRole('ORG_MANAGER','ORG_MEMBER','ORG_VIEWER')")
     public List<Dto.ChannelReportRowDto> byChannel(
             @AuthenticationPrincipal String userId,
             @RequestParam(required = false) LocalDate from,
@@ -65,7 +65,7 @@ public class ReportInsightsController {
     }
 
     @GetMapping("/history")
-    @PreAuthorize("hasAuthority('REPORTS_READ')")
+    @PreAuthorize("hasAuthority('REPORTS_READ') or hasAnyRole('ORG_MANAGER','ORG_MEMBER','ORG_VIEWER')")
     public List<Dto.InventorySnapshotDto> history(
             @RequestParam(required = false) LocalDate from,
             @RequestParam(required = false) LocalDate to) {
@@ -73,7 +73,7 @@ public class ReportInsightsController {
     }
 
     @GetMapping("/export")
-    @PreAuthorize("hasAuthority('REPORTS_READ')")
+    @PreAuthorize("hasAuthority('REPORTS_READ') or hasAnyRole('ORG_MANAGER','ORG_MEMBER','ORG_VIEWER')")
     public ResponseEntity<byte[]> export(
             @RequestParam(required = false) LocalDate from,
             @RequestParam(required = false) LocalDate to,

@@ -28,6 +28,7 @@ public class OrganizationService {
     private final JwtService jwtService;
     private final UserPermissionService userPermissionService;
     private final PasswordEncoder passwordEncoder;
+    private final CategoryService categoryService;
 
     public Dto.AuthResponse onboard(Dto.OnboardingRequest req) {
         String userId = orgContext.requireUserId();
@@ -37,7 +38,7 @@ public class OrganizationService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Org se crea en estado PENDING hasta que el PLATFORM_OWNER la apruebe
+        // Org activa de inmediato: almacén, categorías por defecto y permisos completos
         Organization org = organizationRepository.save(Organization.builder()
                 .name(req.getName().trim())
                 .industry(req.getIndustry())
@@ -45,7 +46,7 @@ public class OrganizationService {
                 .country(req.getCountry())
                 .timezone(req.getTimezone() != null ? req.getTimezone() : "America/Mexico_City")
                 .maxMembers(20)
-                .status(Organization.Status.PENDING)
+                .status(Organization.Status.ACTIVE)
                 .build());
 
         settingsRepository.save(OrganizationSettings.builder()
@@ -60,8 +61,16 @@ public class OrganizationService {
                 .orgRole(OrganizationMember.OrgRole.MANAGER)
                 .build());
 
-        // El JWT refleja que ya tiene org pero aún está pendiente
+        warehouseRepository.save(Warehouse.builder()
+                .organization(org)
+                .name("Principal")
+                .isDefault(true)
+                .build());
+
+        categoryService.seedDefaultsIfEmpty(org.getId());
+
         String token = jwtService.generate(userId, user.getEmail(), null, org.getId(), "MANAGER");
+        SessionPrincipal session = new SessionPrincipal(userId, org.getId(), "MANAGER", null);
         return Dto.AuthResponse.builder()
                 .token(token)
                 .userId(userId)
@@ -70,9 +79,9 @@ public class OrganizationService {
                 .role("MANAGER")
                 .orgRole("MANAGER")
                 .orgId(org.getId())
-                .orgStatus("PENDING")
+                .orgStatus("ACTIVE")
                 .needsOnboarding(false)
-                .permissions(List.of())
+                .permissions(userPermissionService.modulePermissionsForSession(session))
                 .build();
     }
 
@@ -91,6 +100,7 @@ public class OrganizationService {
                     .isDefault(true)
                     .build());
         }
+        categoryService.seedDefaultsIfEmpty(orgId);
     }
 
     public void rejectOrg(String orgId) {

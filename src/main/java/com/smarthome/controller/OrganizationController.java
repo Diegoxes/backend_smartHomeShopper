@@ -13,11 +13,11 @@ import java.util.List;
 @RestController
 @RequestMapping("/organizations")
 @RequiredArgsConstructor
-public class OrganizationController {
-
+public class OrganizationController { 
     private final OrganizationService organizationService;
 
     @PostMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Dto.AuthResponse> onboard(@Valid @RequestBody Dto.OnboardingRequest req) {
         return ResponseEntity.ok(organizationService.onboard(req));
     }

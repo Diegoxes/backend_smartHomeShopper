@@ -31,11 +31,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (jwtService.isValid(token)) {
                 SessionPrincipal session = jwtService.parseSession(token);
                 var authorities = userPermissionService.loadAuthorities(session);
-                if (!authorities.isEmpty()) {
-                    var auth = new UsernamePasswordAuthenticationToken(session.userId(), null, authorities);
-                    auth.setDetails(session);
-                    SecurityContextHolder.getContext().setAuthentication(auth);
-                }
+                var auth = new UsernamePasswordAuthenticationToken(session.userId(), null, authorities);
+                auth.setDetails(session);
+                SecurityContextHolder.getContext().setAuthentication(auth);
             }
         }
         chain.doFilter(req, res);

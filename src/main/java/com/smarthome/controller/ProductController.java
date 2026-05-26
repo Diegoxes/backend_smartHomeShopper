@@ -22,7 +22,7 @@ public class ProductController {
     private final ProductAliasService productAliasService;
 
     @GetMapping
-    @PreAuthorize("hasAuthority('INVENTORY_READ') or hasAuthority('REPORTS_READ')")
+    @PreAuthorize("hasAuthority('INVENTORY_READ') or hasAuthority('REPORTS_READ') or hasAnyRole('ORG_MANAGER','ORG_MEMBER','ORG_VIEWER')")
     public List<Dto.ProductResponse> list(
             @AuthenticationPrincipal String userId,
             @RequestParam(required = false) Boolean lowStock,
@@ -34,13 +34,13 @@ public class ProductController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('INVENTORY_READ')")
+    @PreAuthorize("hasAuthority('INVENTORY_READ') or hasAnyRole('ORG_MANAGER','ORG_MEMBER','ORG_VIEWER')")
     public Dto.ProductResponse get(@PathVariable String id, @AuthenticationPrincipal String userId) {
         return productService.getById(id, userId);
     }
 
     @GetMapping("/{id}/movements")
-    @PreAuthorize("hasAuthority('INVENTORY_READ')")
+    @PreAuthorize("hasAuthority('INVENTORY_READ') or hasAnyRole('ORG_MANAGER','ORG_MEMBER','ORG_VIEWER')")
     public List<Dto.ProductMovementDto> movements(
             @PathVariable String id,
             @RequestParam(required = false) LocalDate from,
@@ -49,7 +49,7 @@ public class ProductController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('INVENTORY_CREATE')")
+    @PreAuthorize("hasAuthority('INVENTORY_CREATE') or hasAnyRole('ORG_MANAGER','ORG_MEMBER')")
     public ResponseEntity<Dto.ProductResponse> create(
             @AuthenticationPrincipal String userId,
             @Valid @RequestBody Dto.CreateProductRequest req) {
@@ -57,7 +57,7 @@ public class ProductController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAuthority('INVENTORY_UPDATE')")
+    @PreAuthorize("hasAuthority('INVENTORY_UPDATE') or hasAnyRole('ORG_MANAGER','ORG_MEMBER')")
     public Dto.ProductResponse update(
             @PathVariable String id,
             @AuthenticationPrincipal String userId,
@@ -66,7 +66,7 @@ public class ProductController {
     }
 
     @PostMapping("/{id}/adjust")
-    @PreAuthorize("hasAuthority('INVENTORY_UPDATE')")
+    @PreAuthorize("hasAuthority('INVENTORY_UPDATE') or hasAnyRole('ORG_MANAGER','ORG_MEMBER')")
     public Dto.ProductResponse adjust(
             @PathVariable String id,
             @Valid @RequestBody Dto.AdjustStockRequest req) {
@@ -83,7 +83,7 @@ public class ProductController {
     }
 
     @PostMapping("/{id}/consume")
-    @PreAuthorize("hasAuthority('INVENTORY_UPDATE')")
+    @PreAuthorize("hasAuthority('INVENTORY_UPDATE') or hasAnyRole('ORG_MANAGER','ORG_MEMBER')")
     public Dto.ProductResponse consume(
             @PathVariable String id,
             @AuthenticationPrincipal String userId,
@@ -92,7 +92,7 @@ public class ProductController {
     }
 
     @PostMapping("/{id}/restock")
-    @PreAuthorize("hasAuthority('INVENTORY_UPDATE')")
+    @PreAuthorize("hasAuthority('INVENTORY_UPDATE') or hasAnyRole('ORG_MANAGER','ORG_MEMBER')")
     public Dto.ProductResponse restock(
             @PathVariable String id,
             @AuthenticationPrincipal String userId,
@@ -101,7 +101,7 @@ public class ProductController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('INVENTORY_DELETE')")
+    @PreAuthorize("hasAuthority('INVENTORY_DELETE') or hasRole('ORG_MANAGER')")
     public ResponseEntity<Void> delete(@PathVariable String id, @AuthenticationPrincipal String userId) {
         productService.delete(id, userId);
         return ResponseEntity.noContent().build();

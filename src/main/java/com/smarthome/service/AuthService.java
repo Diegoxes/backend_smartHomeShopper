@@ -67,9 +67,11 @@ public class AuthService {
         String orgStatus = membership.map(m -> m.getOrganization().getStatus().name()).orElse(null);
         String displayRole = platformRole != null ? platformRole : (orgRole != null ? orgRole : "PENDING");
 
-        // Solo dar permisos si la org está ACTIVE (o si es PLATFORM_OWNER)
+        // Permisos si la org no está rechazada (ACTIVE o PENDING pueden operar)
         SessionPrincipal session = new SessionPrincipal(userId, orgId, orgRole, platformRole);
-        boolean orgActive = "ACTIVE".equals(orgStatus) || "PLATFORM_OWNER".equals(platformRole);
+        boolean orgRejected = "REJECTED".equals(orgStatus);
+        boolean grantPermissions = "PLATFORM_OWNER".equals(platformRole)
+                || (orgId != null && !orgRejected);
 
         return Dto.AuthMeResponse.builder()
                 .userId(user.getId())
@@ -81,7 +83,7 @@ public class AuthService {
                 .orgId(orgId)
                 .orgStatus(orgStatus)
                 .needsOnboarding(orgId == null && !"PLATFORM_OWNER".equals(platformRole))
-                .permissions(orgActive ? userPermissionService.modulePermissionsForSession(session) : List.of())
+                .permissions(grantPermissions ? userPermissionService.modulePermissionsForSession(session) : List.of())
                 .build();
     }
 
@@ -98,7 +100,9 @@ public class AuthService {
 
         String token = jwtService.generate(full.getId(), full.getEmail(), platformRole, orgId, orgRole);
         SessionPrincipal session = new SessionPrincipal(full.getId(), orgId, orgRole, platformRole);
-        boolean orgActive = "ACTIVE".equals(orgStatus) || "PLATFORM_OWNER".equals(platformRole);
+        boolean orgRejected = "REJECTED".equals(orgStatus);
+        boolean grantPermissions = "PLATFORM_OWNER".equals(platformRole)
+                || (orgId != null && !orgRejected);
 
         return Dto.AuthResponse.builder()
                 .token(token)
@@ -111,7 +115,7 @@ public class AuthService {
                 .orgId(orgId)
                 .orgStatus(orgStatus)
                 .needsOnboarding(orgId == null && !"PLATFORM_OWNER".equals(platformRole))
-                .permissions(orgActive ? userPermissionService.modulePermissionsForSession(session) : List.of())
+                .permissions(grantPermissions ? userPermissionService.modulePermissionsForSession(session) : List.of())
                 .build();
     }
 }

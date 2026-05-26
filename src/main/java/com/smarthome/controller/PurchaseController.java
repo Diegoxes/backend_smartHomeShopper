@@ -19,7 +19,7 @@ public class PurchaseController {
     private final PurchaseRecordService purchaseRecordService;
 
     @PostMapping
-    @PreAuthorize("hasAuthority('PURCHASES_CREATE')")
+    @PreAuthorize("hasAuthority('PURCHASES_CREATE') or hasRole('ORG_MANAGER')")
     public ResponseEntity<Dto.PurchaseRowDto> record(
             @AuthenticationPrincipal String userId,
             @Valid @RequestBody Dto.CreatePurchaseRequest body) {
@@ -27,7 +27,7 @@ public class PurchaseController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('PURCHASES_READ')")
+    @PreAuthorize("hasAuthority('PURCHASES_READ') or hasAnyRole('ORG_MANAGER','ORG_MEMBER','ORG_VIEWER')")
     public Dto.PurchasesPageDto list(
             @AuthenticationPrincipal String userId,
             @RequestParam(required = false) String productId,

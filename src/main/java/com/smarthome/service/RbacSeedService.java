@@ -26,6 +26,9 @@ public class RbacSeedService {
     public void ensureSeeded() {
         if (roleRepository.count() == 0) {
             seedRolesAndModules();
+        } else if (roleModuleRepository.count() == 0) {
+            log.warn("Roles existen pero role_modules está vacío — reparando permisos RBAC");
+            repairRoleModules();
         }
         Role member = roleRepository.findByName("MEMBER")
                 .orElseThrow(() -> new IllegalStateException("Rol MEMBER no encontrado; revisa el seed RBAC."));
@@ -33,6 +36,43 @@ public class RbacSeedService {
         if (fixed > 0) {
             log.info("Usuarios sin role_id actualizados a MEMBER: {}", fixed);
         }
+    }
+
+    private void repairRoleModules() {
+        Role owner = roleRepository.findByName("PLATFORM_OWNER")
+                .orElseGet(() -> roleRepository.save(Role.builder().name("PLATFORM_OWNER").build()));
+        Role manager = roleRepository.findByName("MANAGER")
+                .orElseGet(() -> roleRepository.save(Role.builder().name("MANAGER").build()));
+        Role member = roleRepository.findByName("MEMBER")
+                .orElseGet(() -> roleRepository.save(Role.builder().name("MEMBER").build()));
+        Role viewer = roleRepository.findByName("VIEWER")
+                .orElseGet(() -> roleRepository.save(Role.builder().name("VIEWER").build()));
+
+        AppModule inv = ensureModule("Inventario", "INVENTORY");
+        AppModule pur = ensureModule("Compras", "PURCHASES");
+        AppModule rep = ensureModule("Informes", "REPORTS");
+        AppModule usr = ensureModule("Usuarios", "USERS");
+
+        for (AppModule m : new AppModule[] { inv, pur, rep, usr }) {
+            grant(owner, m, true, true, true, true);
+        }
+        grant(manager, inv, true, true, true, true);
+        grant(manager, pur, true, true, true, true);
+        grant(manager, rep, true, true, true, true);
+        grant(manager, usr, true, true, true, false);
+        grant(member, inv, true, true, true, true);
+        grant(member, pur, false, true, false, false);
+        grant(member, rep, false, true, false, false);
+        grant(member, usr, false, true, false, false);
+        for (AppModule m : new AppModule[] { inv, pur, rep, usr }) {
+            grant(viewer, m, false, true, false, false);
+        }
+        log.info("Reparación RBAC: role_modules recreados.");
+    }
+
+    private AppModule ensureModule(String name, String key) {
+        return moduleRepository.findByKey(key)
+                .orElseGet(() -> moduleRepository.save(AppModule.builder().name(name).key(key).build()));
     }
 
     private void seedRolesAndModules() {
@@ -50,21 +90,17 @@ public class RbacSeedService {
         AppModule usr = moduleRepository.save(
                 AppModule.builder().name("Usuarios").key("USERS").build());
 
-        // PLATFORM_OWNER: CRUD en todos los módulos
         for (AppModule m : new AppModule[] { inv, pur, rep, usr }) {
             grant(owner, m, true, true, true, true);
         }
-        // MANAGER: CRUD salvo eliminar en USERS
         grant(manager, inv, true, true, true, true);
         grant(manager, pur, true, true, true, true);
         grant(manager, rep, true, true, true, true);
         grant(manager, usr, true, true, true, false);
-        // MEMBER: inventario completo; resto solo lectura
         grant(member, inv, true, true, true, true);
         grant(member, pur, false, true, false, false);
         grant(member, rep, false, true, false, false);
         grant(member, usr, false, true, false, false);
-        // VIEWER: solo lectura
         for (AppModule m : new AppModule[] { inv, pur, rep, usr }) {
             grant(viewer, m, false, true, false, false);
         }
@@ -73,6 +109,9 @@ public class RbacSeedService {
     }
 
     private void grant(Role role, AppModule mod, boolean c, boolean r, boolean u, boolean d) {
+        if (roleModuleRepository.findByRole_IdAndModule_Id(role.getId(), mod.getId()).isPresent()) {
+            return;
+        }
         RoleModule rm = new RoleModule();
         rm.setRole(role);
         rm.setModule(mod);

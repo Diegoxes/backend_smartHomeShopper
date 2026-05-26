@@ -19,13 +19,13 @@ public class DashboardController {
     private final ExecutiveDashboardService executiveDashboardService;
 
     @GetMapping
-    @PreAuthorize("hasAuthority('INVENTORY_READ') or hasAuthority('REPORTS_READ')")
+    @PreAuthorize("hasAuthority('INVENTORY_READ') or hasAuthority('REPORTS_READ') or hasAnyRole('ORG_MANAGER','ORG_MEMBER','ORG_VIEWER')")
     public Dto.DashboardResponse dashboard(@AuthenticationPrincipal String userId) {
         return productService.getDashboard(userId);
     }
 
     @GetMapping("/executive")
-    @PreAuthorize("hasAuthority('REPORTS_READ')")
+    @PreAuthorize("hasAuthority('REPORTS_READ') or hasAnyRole('ORG_MANAGER','ORG_MEMBER','ORG_VIEWER')")
     public Dto.ExecutiveDashboardDto executive() {
         return executiveDashboardService.executive();
     }
