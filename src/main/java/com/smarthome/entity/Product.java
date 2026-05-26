@@ -19,8 +19,35 @@ public class Product {
     private String id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "organization_id")
+    private Organization organization;
+
+    /** Legacy / auditoría: quien creó el producto. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
     private User user;
+
+    @Column(name = "sku", length = 64)
+    private String sku;
+
+    @Column(name = "internal_code", length = 64)
+    private String internalCode;
+
+    @Column(name = "sale_price", precision = 14, scale = 4)
+    private java.math.BigDecimal salePrice;
+
+    @Column(name = "last_cost", precision = 14, scale = 4)
+    private java.math.BigDecimal lastCost;
+
+    @Column(name = "avg_cost", precision = 14, scale = 4)
+    private java.math.BigDecimal avgCost;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "purchase_unit")
+    private UnitType purchaseUnit;
+
+    @Column(name = "units_per_purchase_unit")
+    private Double unitsPerPurchaseUnit;
 
     @Column(nullable = false)
     private String name;
@@ -75,8 +102,12 @@ public class Product {
     }
 
     public boolean isExpiringSoon() {
+        return isExpiringSoon(7);
+    }
+
+    public boolean isExpiringSoon(int alertDays) {
         if (expiryDate == null) return false;
-        return expiryDate.isBefore(LocalDate.now().plusDays(7));
+        return expiryDate.isBefore(LocalDate.now().plusDays(alertDays));
     }
 
     public enum UnitType {

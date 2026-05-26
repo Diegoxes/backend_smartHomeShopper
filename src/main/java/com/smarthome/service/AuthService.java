@@ -1,16 +1,16 @@
 package com.smarthome.service;
 
 import com.smarthome.dto.Dto;
-import com.smarthome.entity.Role;
-import com.smarthome.entity.User;
-import com.smarthome.repository.RoleRepository;
-import com.smarthome.repository.UserRepository;
+import com.smarthome.entity.*;
+import com.smarthome.repository.*;
+import com.smarthome.security.SessionPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Locale;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -19,12 +19,12 @@ public class AuthService {
 
     private final UserRepository userRepo;
     private final RoleRepository roleRepo;
+    private final OrganizationMemberRepository memberRepo;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final UserPermissionService userPermissionService;
 
-    /** Misma forma de guardar y buscar el email (evita fallos login por mayúsculas / espacios). */
-    private static String normalizeEmail(String email) { 
+    private static String normalizeEmail(String email) {
         return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
     }
 
@@ -33,27 +33,16 @@ public class AuthService {
         if (userRepo.existsByEmailIgnoreCase(email))
             throw new RuntimeException("Email already registered");
 
-        Role defaultRole = roleRepo.findByName("MEMBER")
-                .orElseThrow(() -> new IllegalStateException("Rol MEMBER no configurado; ejecuta el arranque de la app"));
-
         User user = User.builder()
                 .email(email)
                 .password(passwordEncoder.encode(req.getPassword()))
                 .name(req.getName().trim())
                 .whatsappNumber(req.getWhatsappNumber() != null ? req.getWhatsappNumber().trim() : null)
-                .role(defaultRole)
+                .role(null)
                 .build();
         userRepo.save(user);
-        User full = userRepo.findByIdWithRbac(user.getId())
-                .orElseThrow(() -> new IllegalStateException("Usuario recién creado no encontrado"));
 
-        String token = jwtService.generate(full.getId(), full.getEmail(), full.getRole().getName());
-        return Dto.AuthResponse.builder()
-                .token(token).userId(full.getId())
-                .name(full.getName()).email(full.getEmail())
-                .role(full.getRole().getName())
-                .permissions(userPermissionService.modulePermissionsFromUser(full))
-                .build();
+        return buildAuthResponse(user);
     }
 
     @Transactional(readOnly = true)
@@ -63,32 +52,57 @@ public class AuthService {
                 .orElseThrow(() -> new RuntimeException("Invalid credentials"));
         if (!passwordEncoder.matches(req.getPassword(), user.getPassword()))
             throw new RuntimeException("Invalid credentials");
-        User full = userRepo.findByIdWithRbac(user.getId())
-                .orElseThrow(() -> new RuntimeException("Invalid credentials"));
-        if (full.getRole() == null)
-            throw new RuntimeException("Cuenta sin rol asignado; espera a que el sistema termine de actualizar o contacta al administrador.");
-
-        String token = jwtService.generate(full.getId(), full.getEmail(), full.getRole().getName());
-        return Dto.AuthResponse.builder()
-                .token(token).userId(full.getId())
-                .name(full.getName()).email(full.getEmail())
-                .role(full.getRole().getName())
-                .permissions(userPermissionService.modulePermissionsFromUser(full))
-                .build();
+        return buildAuthResponse(user);
     }
 
     @Transactional(readOnly = true)
     public Dto.AuthMeResponse me(String userId) {
         User user = userRepo.findByIdWithRbac(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        if (user.getRole() == null)
-            throw new RuntimeException("Cuenta sin rol asignado; contacta al administrador.");
+        Optional<OrganizationMember> membership = memberRepo.findByUserId(userId);
+        String platformRole = user.getRole() != null ? user.getRole().getName() : null;
+        String orgRole = membership.map(m -> m.getOrgRole().name()).orElse(null);
+        String orgId = membership.map(m -> m.getOrganization().getId()).orElse(null);
+        String displayRole = platformRole != null ? platformRole : (orgRole != null ? orgRole : "PENDING");
+
+        SessionPrincipal session = new SessionPrincipal(userId, orgId, orgRole, platformRole);
         return Dto.AuthMeResponse.builder()
                 .userId(user.getId())
                 .name(user.getName())
                 .email(user.getEmail())
-                .role(user.getRole().getName())
-                .permissions(userPermissionService.modulePermissionsFromUser(user))
+                .role(displayRole)
+                .platformRole(platformRole)
+                .orgRole(orgRole)
+                .orgId(orgId)
+                .needsOnboarding(orgId == null && !"PLATFORM_OWNER".equals(platformRole))
+                .permissions(userPermissionService.modulePermissionsForSession(session))
+                .build();
+    }
+
+    private Dto.AuthResponse buildAuthResponse(User user) {
+        User full = userRepo.findByIdWithRbac(user.getId())
+                .orElseThrow(() -> new IllegalStateException("Usuario recién creado no encontrado"));
+        Optional<OrganizationMember> membership = memberRepo.findByUserId(full.getId());
+
+        String platformRole = full.getRole() != null ? full.getRole().getName() : null;
+        String orgId = membership.map(m -> m.getOrganization().getId()).orElse(null);
+        String orgRole = membership.map(m -> m.getOrgRole().name()).orElse(null);
+        String displayRole = platformRole != null ? platformRole : (orgRole != null ? orgRole : "PENDING");
+
+        String token = jwtService.generate(full.getId(), full.getEmail(), platformRole, orgId, orgRole);
+        SessionPrincipal session = new SessionPrincipal(full.getId(), orgId, orgRole, platformRole);
+
+        return Dto.AuthResponse.builder()
+                .token(token)
+                .userId(full.getId())
+                .name(full.getName())
+                .email(full.getEmail())
+                .role(displayRole)
+                .platformRole(platformRole)
+                .orgRole(orgRole)
+                .orgId(orgId)
+                .needsOnboarding(orgId == null && !"PLATFORM_OWNER".equals(platformRole))
+                .permissions(userPermissionService.modulePermissionsForSession(session))
                 .build();
     }
 }

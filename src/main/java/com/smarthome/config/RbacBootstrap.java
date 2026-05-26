@@ -1,5 +1,6 @@
 package com.smarthome.config;
 
+import com.smarthome.service.OrganizationMigrationService;
 import com.smarthome.service.RbacSeedService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
@@ -13,9 +14,11 @@ import org.springframework.stereotype.Component;
 public class RbacBootstrap implements ApplicationRunner {
 
     private final RbacSeedService rbacSeedService;
+    private final OrganizationMigrationService organizationMigrationService;
 
     @Override
     public void run(ApplicationArguments args) {
         rbacSeedService.ensureSeeded();
+        organizationMigrationService.migrateIfNeeded();
     }
 }

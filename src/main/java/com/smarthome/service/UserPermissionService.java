@@ -1,10 +1,9 @@
 package com.smarthome.service;
 
 import com.smarthome.dto.Dto;
-import com.smarthome.entity.Role;
-import com.smarthome.entity.RoleModule;
-import com.smarthome.entity.User;
-import com.smarthome.repository.UserRepository;
+import com.smarthome.entity.*;
+import com.smarthome.repository.*;
+import com.smarthome.security.SessionPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -18,64 +17,70 @@ import java.util.List;
 public class UserPermissionService {
 
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
 
-    public List<GrantedAuthority> loadAuthorities(String userId) {
-        return userRepository.findByIdWithRbac(userId)
-                .map(this::toAuthorities)
-                .orElse(List.of());
-    }
-
-    private List<GrantedAuthority> toAuthorities(User user) {
+    public List<GrantedAuthority> loadAuthorities(SessionPrincipal session) {
         List<GrantedAuthority> out = new ArrayList<>();
-        Role role = user.getRole();
-        if (role == null) {
-            return out;
+
+        if (session.isPlatformOwner()) {
+            out.add(new SimpleGrantedAuthority("ROLE_PLATFORM_OWNER"));
+            roleRepository.findByName("PLATFORM_OWNER").ifPresent(r -> appendModuleAuthorities(out, r));
         }
-        out.add(new SimpleGrantedAuthority("ROLE_" + role.getName()));
-        List<RoleModule> rms = role.getRoleModules();
-        if (rms == null) {
-            return out;
+
+        if (session.orgRole() != null) {
+            out.add(new SimpleGrantedAuthority("ROLE_ORG_" + session.orgRole()));
+            roleRepository.findByName(session.orgRole()).ifPresent(r -> appendModuleAuthorities(out, r));
         }
-        for (RoleModule rm : rms) {
-            if (rm.getModule() == null) {
-                continue;
-            }
-            String key = rm.getModule().getKey();
-            if (rm.isCanRead()) {
-                out.add(new SimpleGrantedAuthority(key + "_READ"));
-            }
-            if (rm.isCanCreate()) {
-                out.add(new SimpleGrantedAuthority(key + "_CREATE"));
-            }
-            if (rm.isCanUpdate()) {
-                out.add(new SimpleGrantedAuthority(key + "_UPDATE"));
-            }
-            if (rm.isCanDelete()) {
-                out.add(new SimpleGrantedAuthority(key + "_DELETE"));
-            }
+
+        if (out.isEmpty()) {
+            return userRepository.findByIdWithRbac(session.userId())
+                    .map(u -> {
+                        List<GrantedAuthority> legacy = new ArrayList<>();
+                        if (u.getRole() != null) {
+                            legacy.add(new SimpleGrantedAuthority("ROLE_" + u.getRole().getName()));
+                            appendModuleAuthorities(legacy, u.getRole());
+                        }
+                        return legacy;
+                    })
+                    .orElse(List.of());
         }
         return out;
     }
 
-    public java.util.List<Dto.ModulePermissionDto> modulePermissionsForUser(String userId) {
-        return userRepository.findByIdWithRbac(userId)
-                .map(this::modulePermissionsFromUser)
+    private void appendModuleAuthorities(List<GrantedAuthority> out, Role role) {
+        if (role.getRoleModules() == null) return;
+        for (RoleModule rm : role.getRoleModules()) {
+            if (rm.getModule() == null) continue;
+            String key = rm.getModule().getKey();
+            if (rm.isCanRead()) out.add(new SimpleGrantedAuthority(key + "_READ"));
+            if (rm.isCanCreate()) out.add(new SimpleGrantedAuthority(key + "_CREATE"));
+            if (rm.isCanUpdate()) out.add(new SimpleGrantedAuthority(key + "_UPDATE"));
+            if (rm.isCanDelete()) out.add(new SimpleGrantedAuthority(key + "_DELETE"));
+        }
+    }
+
+    public List<Dto.ModulePermissionDto> modulePermissionsForSession(SessionPrincipal session) {
+        String roleName = session.isPlatformOwner() ? "PLATFORM_OWNER" : session.orgRole();
+        if (roleName == null) {
+            return userRepository.findByIdWithRbac(session.userId())
+                    .map(this::modulePermissionsFromUser)
+                    .orElse(List.of());
+        }
+        return roleRepository.findByName(roleName)
+                .map(this::modulePermissionsFromRole)
                 .orElse(List.of());
     }
 
-    public java.util.List<Dto.ModulePermissionDto> modulePermissionsFromUser(User user) {
-        if (user.getRole() == null) {
-            return List.of();
-        }
-        List<RoleModule> rms = user.getRole().getRoleModules();
-        if (rms == null) {
-            return List.of();
-        }
-        java.util.List<Dto.ModulePermissionDto> out = new ArrayList<>();
-        for (RoleModule rm : rms) {
-            if (rm.getModule() == null) {
-                continue;
-            }
+    public List<Dto.ModulePermissionDto> modulePermissionsFromUser(User user) {
+        if (user.getRole() == null) return List.of();
+        return modulePermissionsFromRole(user.getRole());
+    }
+
+    private List<Dto.ModulePermissionDto> modulePermissionsFromRole(Role role) {
+        if (role.getRoleModules() == null) return List.of();
+        List<Dto.ModulePermissionDto> out = new ArrayList<>();
+        for (RoleModule rm : role.getRoleModules()) {
+            if (rm.getModule() == null) continue;
             out.add(Dto.ModulePermissionDto.builder()
                     .key(rm.getModule().getKey())
                     .canCreate(rm.isCanCreate())

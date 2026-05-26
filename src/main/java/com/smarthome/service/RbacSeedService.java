@@ -36,7 +36,7 @@ public class RbacSeedService {
     }
 
     private void seedRolesAndModules() {
-        Role owner = roleRepository.save(Role.builder().name("OWNER").build());
+        Role owner = roleRepository.save(Role.builder().name("PLATFORM_OWNER").build());
         Role manager = roleRepository.save(Role.builder().name("MANAGER").build());
         Role member = roleRepository.save(Role.builder().name("MEMBER").build());
         Role viewer = roleRepository.save(Role.builder().name("VIEWER").build());
@@ -50,7 +50,7 @@ public class RbacSeedService {
         AppModule usr = moduleRepository.save(
                 AppModule.builder().name("Usuarios").key("USERS").build());
 
-        // OWNER: CRUD en todos los módulos
+        // PLATFORM_OWNER: CRUD en todos los módulos
         for (AppModule m : new AppModule[] { inv, pur, rep, usr }) {
             grant(owner, m, true, true, true, true);
         }

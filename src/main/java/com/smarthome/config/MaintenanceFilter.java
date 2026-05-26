@@ -71,7 +71,7 @@ public class MaintenanceFilter extends OncePerRequestFilter {
 
     private static boolean isOwner(Authentication auth) {
         for (GrantedAuthority a : auth.getAuthorities()) {
-            if ("ROLE_OWNER".equals(a.getAuthority())) {
+            if ("ROLE_PLATFORM_OWNER".equals(a.getAuthority())) {
                 return true;
             }
         }

@@ -15,6 +15,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(403).body(Map.of("error", "No tienes permiso para esta acción"));
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> handleBadArg(IllegalArgumentException e) {
+        String m = e.getMessage() != null ? e.getMessage() : "argumento inválido";
+        return ResponseEntity.badRequest().body(Map.of("error", m));
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, String>> handleConflict(IllegalStateException e) {
+        String m = e.getMessage() != null ? e.getMessage() : "conflict";
+        return ResponseEntity.status(409).body(Map.of("error", m));
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, String>> handle(RuntimeException e) {
         int status = e.getMessage().contains("not found") ? 404

@@ -16,7 +16,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/admin")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('OWNER')")
+@PreAuthorize("hasRole('PLATFORM_OWNER')")
 public class AdminController {
 
     private final AdminRbacService adminRbacService;

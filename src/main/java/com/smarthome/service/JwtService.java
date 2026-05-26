@@ -1,5 +1,6 @@
 package com.smarthome.service;
 
+import com.smarthome.security.SessionPrincipal;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -11,11 +12,12 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 public class JwtService {
 
-    /** Mínimo 32 bytes (256 bits) para HS256 (RFC 7518). Si el valor es más corto, se deriva con SHA-256. */
     private static final int MIN_KEY_BYTES = 32;
 
     @Value("${jwt.secret}")
@@ -43,15 +45,35 @@ public class JwtService {
         }
     }
 
-    public String generate(String userId, String email, String roleName) {
+    public String generate(String userId, String email, String platformRole, String orgId, String orgRole) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("email", email);
+        if (platformRole != null) {
+            claims.put("platformRole", platformRole);
+        }
+        if (orgId != null) {
+            claims.put("orgId", orgId);
+        }
+        if (orgRole != null) {
+            claims.put("orgRole", orgRole);
+        }
         return Jwts.builder()
                 .subject(userId)
-                .claim("email", email)
-                .claim("role", roleName)
+                .claims(claims)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(key())
                 .compact();
+    }
+
+    public SessionPrincipal parseSession(String token) {
+        Claims claims = parseClaims(token);
+        return new SessionPrincipal(
+                claims.getSubject(),
+                claims.get("orgId", String.class),
+                claims.get("orgRole", String.class),
+                claims.get("platformRole", String.class)
+        );
     }
 
     public String extractUserId(String token) {
@@ -59,8 +81,12 @@ public class JwtService {
     }
 
     public boolean isValid(String token) {
-        try { parseClaims(token); return true; }
-        catch (Exception e) { return false; }
+        try {
+            parseClaims(token);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private Claims parseClaims(String token) {

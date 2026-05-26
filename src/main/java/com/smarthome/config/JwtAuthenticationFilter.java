@@ -2,6 +2,7 @@ package com.smarthome.config;
 
 import com.smarthome.service.JwtService;
 import com.smarthome.service.UserPermissionService;
+import com.smarthome.security.SessionPrincipal;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,10 +29,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
             if (jwtService.isValid(token)) {
-                String userId = jwtService.extractUserId(token);
-                var authorities = userPermissionService.loadAuthorities(userId);
+                SessionPrincipal session = jwtService.parseSession(token);
+                var authorities = userPermissionService.loadAuthorities(session);
                 if (!authorities.isEmpty()) {
-                    var auth = new UsernamePasswordAuthenticationToken(userId, null, authorities);
+                    var auth = new UsernamePasswordAuthenticationToken(session.userId(), null, authorities);
+                    auth.setDetails(session);
                     SecurityContextHolder.getContext().setAuthentication(auth);
                 }
             }

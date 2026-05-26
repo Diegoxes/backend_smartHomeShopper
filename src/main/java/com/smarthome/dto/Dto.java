@@ -25,9 +25,12 @@ public class Dto {
         private String userId;
         private String name;
         private String email;
-        /** Uno de: OWNER, MANAGER, MEMBER, VIEWER */
+        /** Rol mostrado: PLATFORM_OWNER, MANAGER, MEMBER, VIEWER o PENDING */
         private String role;
-        /** Permisos por módulo (clave = key del módulo, p. ej. INVENTORY). */
+        private String platformRole;
+        private String orgRole;
+        private String orgId;
+        private boolean needsOnboarding;
         private java.util.List<ModulePermissionDto> permissions;
     }
 
@@ -46,6 +49,10 @@ public class Dto {
         private String name;
         private String email;
         private String role;
+        private String platformRole;
+        private String orgRole;
+        private String orgId;
+        private boolean needsOnboarding;
         private java.util.List<ModulePermissionDto> permissions;
     }
 
@@ -56,6 +63,8 @@ public class Dto {
 
     @Data public static class CreateProductRequest {
         @NotBlank private String name;
+        @NotBlank private String sku;
+        private String internalCode;
         @NotNull @Min(0) private Double quantity;
         @NotNull @Min(0) private Double minQuantity;
         @NotNull private Product.UnitType unit;
@@ -64,20 +73,30 @@ public class Dto {
         private String barcode;
         private String category;
         private String imageUrl;
+        private java.math.BigDecimal salePrice;
+        private Product.UnitType purchaseUnit;
+        private Double unitsPerPurchaseUnit;
     }
 
     @Data public static class UpdateProductRequest {
         private String name;
+        private String sku;
+        private String internalCode;
         private Double quantity;
         private Double minQuantity;
         private Product.UnitType unit;
         private Double consumptionPerUse;
         private LocalDate expiryDate;
         private String category;
+        private java.math.BigDecimal salePrice;
+        private Product.UnitType purchaseUnit;
+        private Double unitsPerPurchaseUnit;
     }
 
     @Data @Builder public static class ProductResponse {
         private String id;
+        private String sku;
+        private String internalCode;
         private String name;
         private Double quantity;
         private Double minQuantity;
@@ -87,6 +106,12 @@ public class Dto {
         private String barcode;
         private String category;
         private String imageUrl;
+        private java.math.BigDecimal salePrice;
+        private java.math.BigDecimal lastCost;
+        private java.math.BigDecimal avgCost;
+        private java.math.BigDecimal marginPercent;
+        private String purchaseUnit;
+        private Double unitsPerPurchaseUnit;
         private boolean lowStock;
         private boolean expiringSoon;
         private Double daysUntilEmpty;
@@ -97,6 +122,9 @@ public class Dto {
     @Data public static class ConsumeRequest {
         @NotNull @Positive private Double amount;
         private String note;
+        /** Con restock registra también una compra. */
+        private String supplierId;
+        private java.math.BigDecimal unitPrice;
     }
 
     @Data public static class WhatsAppWebhook {
@@ -114,7 +142,172 @@ public class Dto {
         private java.util.List<ProductResponse> allProducts;
     }
 
-    // ── Admin (solo OWNER) ───────────────────────────────────────────────────
+    @Data public static class AdjustStockRequest {
+        @NotNull private Double delta;
+        @NotBlank private String reason;
+    }
+
+    @Data @Builder public static class ProductMovementDto {
+        private LocalDateTime at;
+        private String actionType;
+        private Double quantityChange;
+        private String source;
+        private String note;
+        private String purchaseId;
+    }
+
+    // ── Organización ──────────────────────────────────────────────────────────
+
+    @Data public static class OnboardingRequest {
+        @NotBlank private String name;
+        private String industry;
+        private String currency;
+        private String country;
+        private String timezone;
+    }
+
+    @Data public static class UpdateOrganizationRequest {
+        private String name;
+        private String industry;
+        private String currency;
+        private String country;
+        private String timezone;
+        private Integer expiryAlertDays;
+        private Integer predictionHorizonDays;
+    }
+
+    @Data @Builder public static class OrganizationDto {
+        private String id;
+        private String name;
+        private String industry;
+        private String currency;
+        private String country;
+        private String timezone;
+        private Integer maxMembers;
+        private Integer expiryAlertDays;
+        private Integer predictionHorizonDays;
+    }
+
+    @Data @Builder public static class OrgMemberDto {
+        private String id;
+        private String userId;
+        private String email;
+        private String name;
+        private String orgRole;
+        private String whatsappNumber;
+    }
+
+    @Data public static class CreateOrgMemberRequest {
+        @NotBlank @Email private String email;
+        @NotBlank @Size(min = 6) private String password;
+        @NotBlank private String name;
+        @NotBlank private String orgRole;
+        private String whatsappNumber;
+    }
+
+    @Data public static class UpdateOrgMemberRequest {
+        private String name;
+        private String orgRole;
+    }
+
+    @Data @Builder public static class PlatformOrganizationRowDto {
+        private String id;
+        private String name;
+        private String industry;
+        private int memberCount;
+        private int maxMembers;
+        private LocalDateTime createdAt;
+    }
+
+    @Data @Builder public static class PlatformUserRowDto {
+        private String id;
+        private String email;
+        private String name;
+        private String orgName;
+        private String orgRole;
+        private String platformRole;
+    }
+
+    @Data public static class MaxMembersRequest {
+        @NotNull @Min(1) private Integer maxMembers;
+    }
+
+    // ── Dashboard ejecutivo ───────────────────────────────────────────────────
+
+    @Data @Builder public static class ExecutiveDashboardDto {
+        private java.math.BigDecimal totalStockValue;
+        private java.math.BigDecimal monthPurchaseSpend;
+        private long lowStockCount;
+        private long expiringCount;
+        private java.util.List<RotationReportRowDto> topRotation;
+        private java.util.List<String> stagnantProductIds;
+    }
+
+    // ── Almacenes ─────────────────────────────────────────────────────────────
+
+    @Data @Builder public static class WarehouseDto {
+        private String id;
+        private String name;
+        private boolean isDefault;
+    }
+
+    @Data public static class CreateWarehouseRequest {
+        @NotBlank private String name;
+    }
+
+    @Data public static class TransferStockRequest {
+        @NotBlank private String productId;
+        @NotBlank private String fromWarehouseId;
+        @NotBlank private String toWarehouseId;
+        @NotNull @Positive private Double quantity;
+    }
+
+    // ── Import / imágenes ─────────────────────────────────────────────────────
+
+    @Data @Builder public static class ProductImportPreviewDto {
+        private int validRows;
+        private int invalidRows;
+        private java.util.List<String> errors;
+    }
+
+    @Data public static class ImageUploadRequest {
+        @NotBlank private String filename;
+        @NotBlank private String contentType;
+    }
+
+    @Data @Builder public static class ImageUploadResponse {
+        private String uploadUrl;
+        private String publicUrl;
+    }
+
+    // ── Reportes adicionales ────────────────────────────────────────────────────
+
+    @Data @Builder public static class SupplierSpendRowDto {
+        private String supplierId;
+        private String supplierName;
+        private java.math.BigDecimal totalSpend;
+    }
+
+    @Data @Builder public static class ChannelReportRowDto {
+        private String channel;
+        private double unitsConsumed;
+    }
+
+    @Data @Builder public static class InventorySnapshotDto {
+        private java.time.LocalDate date;
+        private java.math.BigDecimal totalValue;
+        private String breakdownJson;
+    }
+
+    @Data public static class PasswordResetRequest {
+        @NotBlank @Email private String email;
+    }
+
+    @Data @Builder public static class PasswordResetResponse {
+        private String message;
+    }
+
+    // ── Admin (solo PLATFORM_OWNER) ───────────────────────────────────────────
 
     @Data @Builder
     public static class RbacMatrixResponse {
@@ -174,4 +367,128 @@ public class Dto {
     public static class AdminUpdateUserRoleRequest {
         @NotNull private Long roleId;
     }
+
+    // ── Alias de productos ────────────────────────────────────────────────────
+
+    @Data
+    public static class AddAliasRequest {
+        @NotBlank private String alias;
+    }
+
+    @Data @Builder
+    public static class ProductAliasDto {
+        private String id;
+        private String aliasText;
+        private String normalizedAlias;
+        private boolean learnedWhatsApp;
+    }
+
+    // ── Compras y proveedores ───────────────────────────────────────────────────
+
+    @Data
+    public static class CreatePurchaseRequest {
+        @NotBlank private String productId;
+        @NotNull @Positive private Double quantity;
+        private String supplierId;
+        private java.math.BigDecimal unitPrice;
+        private String currency = "MXN";
+        private LocalDateTime purchasedAt;
+        private String note;
+    }
+
+    @Data @Builder
+    public static class PurchaseRowDto {
+        private String id;
+        private String productId;
+        private String productName;
+        private String supplierId;
+        private String supplierName;
+        private Double quantity;
+        private java.math.BigDecimal unitPrice;
+        private java.math.BigDecimal totalAmount;
+        private String currency;
+        private LocalDateTime purchasedAt;
+        private String source;
+    }
+
+    @Data @Builder
+    public static class PurchasesPageDto {
+        private java.util.List<PurchaseRowDto> items;
+        private java.math.BigDecimal periodTotalSpend;
+    }
+
+    @Data
+    public static class CreateSupplierRequest {
+        @NotBlank private String name;
+        private String phone;
+        @Min(0) private Integer leadTimeDays;
+        private String notes;
+    }
+
+    @Data
+    public static class UpdateSupplierRequest {
+        private String name;
+        private String phone;
+        @Min(0) private Integer leadTimeDays;
+        private String notes;
+    }
+
+    @Data @Builder
+    public static class SupplierDto {
+        private String id;
+        private String name;
+        private String phone;
+        private Integer leadTimeDays;
+        private String notes;
+    }
+
+    // ── Informes ───────────────────────────────────────────────────────────────
+
+    @Data @Builder
+    public static class RotationReportRowDto {
+        private String productId;
+        private String productName;
+        private String category;
+        private double unitsConsumed;
+        private Double avgDailyConsumption;
+        private Double estimatedDaysRemaining;
+        private String velocity; // FAST / NORMAL / SLOW / UNKNOWN
+    }
+
+    @Data @Builder
+    public static class RotationReportDto {
+        private java.time.LocalDate fromInclusive;
+        private java.time.LocalDate toInclusive;
+        private java.util.List<RotationReportRowDto> rows;
+    }
+
+    @Data @Builder
+    public static class CategoryBreakdownDto {
+        private String category;
+        private long skuCount;
+        private double quantitySum;
+        private java.math.BigDecimal estimatedSpend;
+    }
+
+    @Data @Builder
+    public static class InventoryReportDto {
+        private long totalSku;
+        private java.math.BigDecimal totalEstimatedValue;
+        private java.util.List<Dto.CategoryBreakdownDto> byCategory;
+        private java.util.List<RotationReportRowDto> topConsumed30d;
+        private java.util.List<String> stagnantProductIds;
+
+    }
+
+    @Getter
+    @AllArgsConstructor
+    public enum ReportExportFormat { XLSX, PDF }
+
+    /** Placeholder hasta integrar almacén S3/signing. */
+    @Data @Builder
+    public static class ReportExportQueuedDto {
+        private String format;
+        private String message;
+    }
 }
+

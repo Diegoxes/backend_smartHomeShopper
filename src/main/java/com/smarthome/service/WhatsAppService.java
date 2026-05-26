@@ -1,9 +1,10 @@
 package com.smarthome.service;
 
-import com.smarthome.entity.ConsumptionLog;
+import com.smarthome.entity.OrganizationMember;
 import com.smarthome.entity.Product;
 import com.smarthome.entity.User;
-import com.smarthome.repository.ConsumptionLogRepository;
+import com.smarthome.repository.OrganizationMemberRepository;
+import com.smarthome.repository.OrganizationSettingsRepository;
 import com.smarthome.repository.ProductRepository;
 import com.smarthome.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +14,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -21,62 +24,95 @@ import java.util.Optional;
 public class WhatsAppService {
 
     private final UserRepository userRepo;
+    private final OrganizationMemberRepository memberRepository;
+    private final OrganizationSettingsRepository settingsRepository;
     private final ProductRepository productRepo;
-    private final ConsumptionLogRepository logRepo;
     private final AiService aiService;
+    private final WhatsAppClarificationService clarification;
+    private final ProductSemanticMatchService semanticMatch;
+    private final WhatsAppInventoryActionService actions;
 
-    @Value("${twilio.whatsapp-from}")
-    private String twilioFrom;
+    @Value("${app.features.ai.enabled:false}")
+    private boolean aiEnabled;
 
     @Transactional
     public String handleIncoming(String fromRaw, String body) {
         String phone = fromRaw.replace("whatsapp:", "").trim();
-        Optional<User> userOpt = userRepo.findByWhatsappNumber(phone);
+        Optional<OrganizationMember> memberOpt = memberRepository.findByUserWhatsappNumber(phone);
 
-        if (userOpt.isEmpty()) {
-            return "Hola! No encontré tu cuenta. Regístrate en smarthome.app con este número de WhatsApp.";
+        if (memberOpt.isEmpty()) {
+            return "Hola. No encontramos tu número en ningún equipo. Pide a tu administrador que lo registre en Inventario B2B.";
         }
 
-        User user = userOpt.get();
-        String msg = body.trim().toLowerCase();
+        OrganizationMember member = memberOpt.get();
+        User user = member.getUser();
+        String orgId = member.getOrganization().getId();
 
-        if (msg.equals("inventario") || msg.equals("stock") || msg.equals("lista")) {
-            return buildInventoryMessage(user.getId());
-        }
-        if (msg.equals("alertas") || msg.equals("bajos")) {
-            return buildAlertsMessage(user.getId());
-        }
-        if (msg.startsWith("-")) {
-            return handleQuickConsume(user, msg);
+        Optional<String> clarified = clarification.consumeReplyIfPending(user, body);
+        if (clarified.isPresent()) {
+            return clarified.get();
         }
 
-        return aiService.parseWhatsAppMessage(user, body);
+        String normalized = body == null ? "" : body.trim().toLowerCase(Locale.ROOT);
+
+        if (normalized.equals("inventario") || normalized.equals("stock") || normalized.equals("lista")) {
+            return buildInventoryMessage(orgId);
+        }
+        if (normalized.equals("alertas") || normalized.equals("bajos")) {
+            return buildAlertsMessage(orgId);
+        }
+        if (normalized.equals("ayuda") || normalized.equals("help")) {
+            return helpMessage();
+        }
+        if (body != null && body.trim().startsWith("-")) {
+            return handleQuickConsume(user, orgId, body.trim());
+        }
+
+        if (!aiEnabled) {
+            return helpMessage();
+        }
+        return aiService.parseWhatsAppMessage(user, orgId, body != null ? body : "");
     }
 
-    private String buildInventoryMessage(String userId) {
-        List<Product> products = productRepo.findByUserId(userId);
-        if (products.isEmpty()) return "Tu inventario está vacío. Agrega productos desde la app.";
+    private String helpMessage() {
+        return """
+                *Comandos disponibles*
+                • *inventario* — ver stock
+                • *alertas* — productos bajos o por vencer
+                • *-[producto]* — consumir 1 unidad (ej: *-leche*)
+                • Responde con el número si te pedimos desambiguar
+                """;
+    }
 
-        StringBuilder sb = new StringBuilder("*Tu inventario* 🏠\n\n");
+    private String buildInventoryMessage(String orgId) {
+        List<Product> products = productRepo.findByOrganizationId(orgId);
+        if (products.isEmpty()) return "Tu catálogo está vacío. Agrega productos desde la aplicación web.";
+
+        StringBuilder sb = new StringBuilder("*Inventario*\n\n");
         for (Product p : products) {
             String icon = p.isLowStock() ? "⚠️" : "✅";
-            sb.append(String.format("%s *%s*: %.1f %s\n", icon, p.getName(), p.getQuantity(), p.getUnit().name().toLowerCase()));
+            sb.append(String.format("%s *%s*: %.1f %s\n",
+                    icon, p.getName(), p.getQuantity(), p.getUnit().name().toLowerCase(Locale.ROOT)));
         }
-        sb.append("\nEnvía *-[producto]* para restar 1 unidad. Ej: *-leche*");
+        sb.append("\nEnvía *-[producto]* para restar 1 unidad.");
         return sb.toString();
     }
 
-    private String buildAlertsMessage(String userId) {
-        List<Product> low      = productRepo.findLowStockByUserId(userId);
-        List<Product> expiring = productRepo.findExpiringByUserId(userId, java.time.LocalDate.now().plusDays(7));
+    private String buildAlertsMessage(String orgId) {
+        int alertDays = settingsRepository.findByOrganizationId(orgId)
+                .map(s -> s.getExpiryAlertDays()).orElse(7);
+        List<Product> low = productRepo.findLowStockByOrganizationId(orgId);
+        List<Product> expiring = productRepo.findExpiringByOrganizationId(orgId,
+                java.time.LocalDate.now().plusDays(alertDays));
 
         if (low.isEmpty() && expiring.isEmpty())
-            return "✅ Todo bien! No hay alertas en tu inventario.";
+            return "✅ Sin alertas activas en tu inventario.";
 
-        StringBuilder sb = new StringBuilder("*Alertas de inventario* ⚠️\n\n");
+        StringBuilder sb = new StringBuilder("*Alertas*\n\n");
         if (!low.isEmpty()) {
             sb.append("*Stock bajo:*\n");
-            low.forEach(p -> sb.append(String.format("• %s (%.1f %s)\n", p.getName(), p.getQuantity(), p.getUnit().name().toLowerCase())));
+            low.forEach(p -> sb.append(String.format("• %s (%.1f %s)\n",
+                    p.getName(), p.getQuantity(), p.getUnit().name().toLowerCase(Locale.ROOT))));
         }
         if (!expiring.isEmpty()) {
             sb.append("\n*Por vencer:*\n");
@@ -85,32 +121,50 @@ public class WhatsAppService {
         return sb.toString();
     }
 
-    private String handleQuickConsume(User user, String msg) {
-        String[] parts = msg.substring(1).trim().split("\\s+");
-        String productName = parts[0];
-        double amount = parts.length > 1 ? safeDouble(parts[1]) : 1.0;
+    private String handleQuickConsume(User user, String orgId, String rawLine) {
+        String inner = rawLine.startsWith("-") ? rawLine.substring(1).trim() : rawLine.trim();
+        if (inner.isEmpty()) {
+            return "Indica producto después del guión, ej.: *-leche*.";
+        }
 
-        List<Product> products = productRepo.findByUserId(user.getId());
-        Optional<Product> match = products.stream()
-                .filter(p -> p.getName().toLowerCase().contains(productName))
-                .findFirst();
+        String[] parts = inner.split("\\s+", 2);
+        String spoken = parts[0].trim();
+        double amount = 1.0;
+        if (parts.length > 1) {
+            amount = safeDouble(parts[1].trim().split("\\s+")[0]);
+        }
 
-        if (match.isEmpty())
-            return "No encontré *" + productName + "* en tu inventario.";
+        ProductSemanticMatchService.MatchResult res = semanticMatch.resolve(orgId, spoken, true);
 
-        Product p = match.get();
-        double newQty = Math.max(0, p.getQuantity() - amount);
-        p.setQuantity(newQty);
-        productRepo.save(p);
+        if (res instanceof ProductSemanticMatchService.MatchExact ex) {
+            Product p = ex.product();
+            actions.consume(user, p, amount);
+            Product refreshed = productRepo.findById(p.getId()).orElse(p);
+            double newQty = refreshed.getQuantity();
+            String alert = refreshed.isLowStock() ? "\n⚠️ Stock bajo." : "";
+            return String.format("✅ *%s*: %.1f %s restante%s",
+                    refreshed.getName(), newQty, refreshed.getUnit().name().toLowerCase(Locale.ROOT), alert);
+        }
 
-        logRepo.save(ConsumptionLog.builder()
-                .product(p).quantityChange(-amount)
-                .actionType(ConsumptionLog.ActionType.CONSUMED)
-                .source(ConsumptionLog.Source.WHATSAPP)
-                .build());
+        if (res instanceof ProductSemanticMatchService.MatchFuzzy mf && mf.candidates() != null && !mf.candidates().isEmpty()) {
+            var lines = mf.candidates().stream().limit(5).map(c -> {
+                var line = new WhatsAppClarificationService.CandidateLine();
+                line.setProductId(c.getId());
+                line.setLabel(c.getLabel());
+                line.setScore(c.getScore());
+                return line;
+            }).collect(Collectors.toList());
 
-        String alert = p.isLowStock() ? "\n⚠️ Stock bajo! Considera reponerlo pronto." : "";
-        return String.format("✅ *%s* actualizado: %.1f %s restante%s", p.getName(), newQty, p.getUnit().name().toLowerCase(), alert);
+            var payload = new WhatsAppClarificationService.ClarificationPayload();
+            payload.setKind("quick_consume");
+            payload.setAction("consume");
+            payload.setOriginalName(spoken);
+            payload.setQuantity(amount);
+            payload.setUnit("UNIT");
+            return clarification.savePendingAndReply(user, payload, lines);
+        }
+
+        return "No encontré *" + spoken + "* en tu catálogo.";
     }
 
     private double safeDouble(String s) {

@@ -1,9 +1,9 @@
 package com.smarthome.controller;
 
 import com.smarthome.config.MaintenanceState;
-import com.smarthome.config.MaintenanceState;
 import com.smarthome.dto.Dto;
 import com.smarthome.service.AuthService;
+import com.smarthome.service.PasswordResetService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +20,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final MaintenanceState maintenanceState;
+    private final PasswordResetService passwordResetService;
 
     @PostMapping("/register")
     public ResponseEntity<Dto.AuthResponse> register(@Valid @RequestBody Dto.RegisterRequest req) {
@@ -43,5 +44,10 @@ public class AuthController {
     @GetMapping("/maintenance")
     public Map<String, Boolean> maintenanceStatus() {
         return Map.of("enabled", maintenanceState.isEnabled());
+    }
+
+    @PostMapping("/password-reset")
+    public ResponseEntity<Dto.PasswordResetResponse> passwordReset(@Valid @RequestBody Dto.PasswordResetRequest req) {
+        return ResponseEntity.ok(passwordResetService.requestReset(req));
     }
 }

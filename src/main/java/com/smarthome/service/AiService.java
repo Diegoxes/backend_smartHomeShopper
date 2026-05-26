@@ -2,10 +2,8 @@ package com.smarthome.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.smarthome.entity.ConsumptionLog;
 import com.smarthome.entity.Product;
 import com.smarthome.entity.User;
-import com.smarthome.repository.ConsumptionLogRepository;
 import com.smarthome.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,7 +12,11 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -22,9 +24,11 @@ import java.util.*;
 public class AiService {
 
     private final ProductRepository productRepo;
-    private final ConsumptionLogRepository logRepo;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
+    private final ProductSemanticMatchService semanticMatch;
+    private final WhatsAppClarificationService clarification;
+    private final WhatsAppInventoryActionService actions;
 
     @Value("${deepseek.api-key}")
     private String deepseekApiKey;
@@ -35,9 +39,9 @@ public class AiService {
     @Value("${deepseek.model}")
     private String deepseekModel;
 
-    public String parseWhatsAppMessage(User user, String message) {
+    public String parseWhatsAppMessage(User user, String orgId, String rawMessage) {
         String systemPrompt = """
-            Eres un asistente de inventario del hogar. Analiza el mensaje del usuario y extrae los productos mencionados.
+            Eres un asistente de inventario B2B. Analiza el mensaje y extrae productos.
             Responde SOLO con un JSON con este formato (sin markdown, sin explicaciones):
             {
               "action": "add" | "consume" | "query" | "unknown",
@@ -54,49 +58,68 @@ public class AiService {
             """;
 
         try {
-            String raw = callDeepSeekChat(systemPrompt, message);
+            String raw = callDeepSeekChat(systemPrompt, rawMessage);
             String jsonResponse = extractJsonObject(raw);
             JsonNode root = objectMapper.readTree(jsonResponse);
 
             String action = root.path("action").asText("unknown");
-            String reply  = root.path("reply").asText("Entendido.");
+            String reply = root.path("reply").asText("Entendido.");
             JsonNode items = root.path("items");
 
-            if (("add".equals(action) || "consume".equals(action)) && items.isArray()) {
-                List<Product> userProducts = productRepo.findByUserId(user.getId());
-                for (JsonNode item : items) {
-                    String name     = item.path("name").asText();
-                    double quantity = item.path("quantity").asDouble(1.0);
-                    String unitStr  = item.path("unit").asText("UNIT");
-                    Product.UnitType unit = safeUnit(unitStr);
+            if (!("add".equals(action) || "consume".equals(action)) || !items.isArray() || items.isEmpty()) {
+                return reply;
+            }
 
-                    Optional<Product> existing = userProducts.stream()
-                            .filter(p -> p.getName().equalsIgnoreCase(name))
-                            .findFirst();
+            boolean singleSemantic = items.size() == 1;
 
-                    if ("add".equals(action)) {
-                        if (existing.isPresent()) {
-                            Product p = existing.get();
-                            p.setQuantity(p.getQuantity() + quantity);
-                            productRepo.save(p);
-                            logRepo.save(log(p, quantity, ConsumptionLog.ActionType.RESTOCKED));
-                        } else {
-                            Product p = Product.builder()
-                                    .user(user).name(name)
-                                    .quantity(quantity).minQuantity(1.0)
-                                    .unit(unit).consumptionPerUse(1.0)
-                                    .build();
-                            productRepo.save(p);
-                        }
-                    } else if ("consume".equals(action)) {
-                        existing.ifPresent(p -> {
-                            p.setQuantity(Math.max(0, p.getQuantity() - quantity));
-                            productRepo.save(p);
-                            logRepo.save(log(p, -quantity, ConsumptionLog.ActionType.CONSUMED));
-                        });
+            for (JsonNode item : items) {
+                String name = item.path("name").asText();
+                double quantity = item.path("quantity").asDouble(1.0);
+                String unitStr = item.path("unit").asText("UNIT");
+                Product.UnitType unit = WhatsAppAiSupport.safeUnit(unitStr);
+
+                ProductSemanticMatchService.MatchResult res =
+                        semanticMatch.resolve(orgId, name, singleSemantic);
+
+                if (singleSemantic && res instanceof ProductSemanticMatchService.MatchFuzzy mf) {
+                    var cands = mf.candidates();
+                    if (cands != null && !cands.isEmpty()) {
+                        var lines = cands.stream().limit(5).map(c -> {
+                                    var line = new WhatsAppClarificationService.CandidateLine();
+                                    line.setProductId(c.getId());
+                                    line.setLabel(c.getLabel());
+                                    line.setScore(c.getScore());
+                                    return line;
+                                })
+                                .collect(Collectors.toList());
+
+                        var payload = new WhatsAppClarificationService.ClarificationPayload();
+                        payload.setKind("llm_item");
+                        payload.setAction(action);
+                        payload.setOriginalName(name);
+                        payload.setQuantity(quantity);
+                        payload.setUnit(unitStr);
+                        return clarification.savePendingAndReply(user, payload, lines);
                     }
                 }
+
+                Optional<Product> target = Optional.empty();
+                if (res instanceof ProductSemanticMatchService.MatchExact mex) {
+                    target = Optional.of(mex.product());
+                } else {
+                    target = legacyEquals(orgId, name);
+                }
+
+                if ("consume".equals(action)) {
+                    target.ifPresent(p -> actions.consume(user, p, quantity));
+                } else {
+                    Product existing = target.orElse(null);
+                    actions.addOrRestock(user, unit, quantity,
+                            existing != null ? existing.getName() : name,
+                            existing);
+                }
             }
+
             return reply;
 
         } catch (Exception e) {
@@ -105,6 +128,14 @@ public class AiService {
         }
     }
 
+    private Optional<Product> legacyEquals(String orgId, String name) {
+        if (name == null || name.isBlank()) return Optional.empty();
+        return productRepo.findByOrganizationId(orgId).stream()
+                .filter(p -> p.getName().equalsIgnoreCase(name.trim()))
+                .findFirst();
+    }
+
+    @SuppressWarnings("unchecked")
     private String callDeepSeekChat(String system, String userMsg) {
         if (deepseekApiKey == null || deepseekApiKey.isBlank()) {
             throw new IllegalStateException("deepseek.api-key / DEEPSEEK_API_KEY no configurada");
@@ -160,18 +191,5 @@ public class AiService {
             }
         }
         return s;
-    }
-
-    private Product.UnitType safeUnit(String s) {
-        try { return Product.UnitType.valueOf(s.toUpperCase()); }
-        catch (Exception e) { return Product.UnitType.UNIT; }
-    }
-
-    private ConsumptionLog log(Product p, double qty, ConsumptionLog.ActionType type) {
-        return ConsumptionLog.builder()
-                .product(p).quantityChange(qty)
-                .actionType(type)
-                .source(ConsumptionLog.Source.WHATSAPP)
-                .build();
     }
 }

@@ -1,6 +1,7 @@
 package com.smarthome.controller;
 
 import com.smarthome.dto.Dto;
+import com.smarthome.service.ProductAliasService;
 import com.smarthome.service.ProductService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +10,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -17,17 +19,33 @@ import java.util.List;
 public class ProductController {
 
     private final ProductService productService;
+    private final ProductAliasService productAliasService;
 
     @GetMapping
     @PreAuthorize("hasAuthority('INVENTORY_READ') or hasAuthority('REPORTS_READ')")
-    public List<Dto.ProductResponse> list(@AuthenticationPrincipal String userId) {
-        return productService.getAllByUser(userId);
+    public List<Dto.ProductResponse> list(
+            @AuthenticationPrincipal String userId,
+            @RequestParam(required = false) Boolean lowStock,
+            @RequestParam(required = false) Boolean expiringSoon,
+            @RequestParam(required = false) Integer stagnantDays,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String q) {
+        return productService.listFiltered(lowStock, expiringSoon, stagnantDays, category, q);
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('INVENTORY_READ')")
     public Dto.ProductResponse get(@PathVariable String id, @AuthenticationPrincipal String userId) {
         return productService.getById(id, userId);
+    }
+
+    @GetMapping("/{id}/movements")
+    @PreAuthorize("hasAuthority('INVENTORY_READ')")
+    public List<Dto.ProductMovementDto> movements(
+            @PathVariable String id,
+            @RequestParam(required = false) LocalDate from,
+            @RequestParam(required = false) LocalDate to) {
+        return productService.movements(id, from, to);
     }
 
     @PostMapping
@@ -45,6 +63,23 @@ public class ProductController {
             @AuthenticationPrincipal String userId,
             @RequestBody Dto.UpdateProductRequest req) {
         return productService.update(id, userId, req);
+    }
+
+    @PostMapping("/{id}/adjust")
+    @PreAuthorize("hasAuthority('INVENTORY_UPDATE')")
+    public Dto.ProductResponse adjust(
+            @PathVariable String id,
+            @Valid @RequestBody Dto.AdjustStockRequest req) {
+        return productService.adjust(id, req);
+    }
+
+    @PostMapping("/{id}/aliases")
+    @PreAuthorize("hasAuthority('INVENTORY_UPDATE')")
+    public ResponseEntity<Dto.ProductAliasDto> addAlias(
+            @PathVariable String id,
+            @AuthenticationPrincipal String userId,
+            @Valid @RequestBody Dto.AddAliasRequest body) {
+        return ResponseEntity.status(201).body(productAliasService.addManual(id, userId, body.getAlias()));
     }
 
     @PostMapping("/{id}/consume")
