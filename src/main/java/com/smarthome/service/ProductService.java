@@ -36,7 +36,11 @@ public class ProductService {
                                                   Integer stagnantDays, String category, String q) {
         String orgId = orgContext.requireOrgId();
         int alertDays = alertDaysForOrg(orgId);
-        List<Product> products = productRepo.findFiltered(orgId, blankToNull(category), blankToNull(q));
+        String cat = blankToNull(category);
+        String query = blankToNull(q);
+        List<Product> products = query == null && cat == null
+                ? productRepo.findByOrganizationIdOrderByName(orgId)
+                : productRepo.findFiltered(orgId, cat, query);
 
         LocalDateTime stagnantCutoff = stagnantDays != null && stagnantDays > 0
                 ? LocalDateTime.now().minusDays(stagnantDays) : null;
