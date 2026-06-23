@@ -20,17 +20,29 @@ public class WhatsAppInventoryActionService {
     private final ConsumptionLogRepository logRepo;
     private final OrganizationMemberRepository memberRepository;
     private final InventoryLotService inventoryLotService;
+    private final ProductUomService productUomService;
+    private final OrganizationContextService orgContext;
 
     @Transactional
     public void consume(User user, Product p, double quantity) {
-        inventoryLotService.consumeFifo(p, quantity);
-        double newQty = Math.max(0, p.getQuantity() - quantity);
+        consume(user, p, quantity, null);
+    }
+
+    @Transactional
+    public void consume(User user, Product p, double quantity, String measureUnitId) {
+        String orgId = p.getOrganization() != null ? p.getOrganization().getId() : orgContext.requireActiveOrgId();
+        double stockUnits = measureUnitId != null && !measureUnitId.isBlank()
+                ? productUomService.toBaseUnits(p.getId(), measureUnitId, quantity)
+                : quantity;
+        inventoryLotService.consumeFifo(p, stockUnits);
+        double newQty = Math.max(0, p.getQuantity() - stockUnits);
         p.setQuantity(newQty);
         productRepo.save(p);
         logRepo.save(ConsumptionLog.builder()
-                .product(p).quantityChange(-quantity)
+                .product(p).quantityChange(-stockUnits)
                 .actionType(ConsumptionLog.ActionType.CONSUMED)
                 .source(ConsumptionLog.Source.WHATSAPP)
+                .inputQuantity(quantity)
                 .build());
     }
 
@@ -38,16 +50,28 @@ public class WhatsAppInventoryActionService {
     public void addOrRestock(User user, Product.UnitType unit, double quantity,
                              String canonicalNameWhenNew,
                              Product existingOrNull) {
+        addOrRestock(user, unit, quantity, canonicalNameWhenNew, existingOrNull, null);
+    }
+
+    @Transactional
+    public void addOrRestock(User user, Product.UnitType unit, double quantity,
+                             String canonicalNameWhenNew,
+                             Product existingOrNull, String measureUnitId) {
         if (existingOrNull != null) {
             Product p = existingOrNull;
-            p.setQuantity(p.getQuantity() + quantity);
+            String orgId = p.getOrganization().getId();
+            double stockUnits = measureUnitId != null && !measureUnitId.isBlank()
+                    ? productUomService.toBaseUnits(p.getId(), measureUnitId, quantity)
+                    : quantity;
+            p.setQuantity(p.getQuantity() + stockUnits);
             productRepo.save(p);
-            inventoryLotService.addLot(p, quantity, p.getExpiryDate());
+            inventoryLotService.addLot(p, stockUnits, p.getExpiryDate());
             logRepo.save(ConsumptionLog.builder()
                     .product(p)
-                    .quantityChange(quantity)
+                    .quantityChange(stockUnits)
                     .actionType(ConsumptionLog.ActionType.RESTOCKED)
                     .source(ConsumptionLog.Source.WHATSAPP)
+                    .inputQuantity(quantity)
                     .build());
             return;
         }
@@ -73,6 +97,7 @@ public class WhatsAppInventoryActionService {
                 .quantityChange(quantity)
                 .actionType(ConsumptionLog.ActionType.RESTOCKED)
                 .source(ConsumptionLog.Source.WHATSAPP)
+                .inputQuantity(quantity)
                 .build());
     }
 }

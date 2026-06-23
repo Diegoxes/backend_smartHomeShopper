@@ -23,9 +23,13 @@ public class WhatsAppController {
             produces = "application/xml")
     public String whatsapp(
             @RequestParam("From") String from,
-            @RequestParam("Body") String body) {
+            @RequestParam(value = "Body", defaultValue = "") String body,
+            @RequestParam(value = "NumMedia", defaultValue = "0") int numMedia,
+            @RequestParam(value = "MediaUrl0", required = false) String mediaUrl0,
+            @RequestParam(value = "MediaContentType0", required = false) String mediaContentType0) {
 
-        WhatsAppReply reply = whatsAppService.handleIncoming(from, body);
+        WhatsAppReply reply = whatsAppService.handleIncoming(
+                from, body, numMedia, mediaUrl0, mediaContentType0);
         return twiml(reply);
     }
 

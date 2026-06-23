@@ -22,11 +22,12 @@ public class PurchaseRecordService {
     private final PurchaseRepository purchaseRepo;
     private final ProductRepository productRepo;
     private final SupplierRepository supplierRepo;
+    private final MeasureUnitRepository measureUnitRepository;
     private final OrganizationContextService orgContext;
 
     @Transactional
     public Dto.PurchaseRowDto createManual(String userId, Dto.CreatePurchaseRequest req) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         Product p = ownedProduct(orgId, req.getProductId());
         Supplier s = ownedSupplierNullable(orgId, req.getSupplierId());
         LocalDateTime at = req.getPurchasedAt() != null ? req.getPurchasedAt() : LocalDateTime.now();
@@ -45,26 +46,53 @@ public class PurchaseRecordService {
     }
 
     @Transactional
-    public void attachToRestockIfPriced(Product product, String orgId, Dto.ConsumeRequest req, String currency) {
+    public void attachToRestockIfPriced(Product product, String orgId, Dto.ConsumeRequest req,
+                                       double stockUnits, String currency) {
         if (req.getUnitPrice() == null) return;
-        Supplier supplier = ownedSupplierNullable(orgId, req.getSupplierId());
+        MeasureUnit mu = resolveMeasureUnit(orgId, req.getMeasureUnitId());
+        saveWebPurchase(product, orgId, stockUnits, req.getUnitPrice(), req.getSupplierId(),
+                defaultCurrency(currency), req.getNote(), mu, req.getAmount(), req.getCostInputMode());
+    }
+
+    /** Stock inicial al crear producto: registra compra si hay costo unitario. */
+    @Transactional
+    public void attachInitialStockIfPriced(Product product, String orgId, double quantity,
+                                         java.math.BigDecimal unitCost, String supplierId, String currency) {
+        if (unitCost == null || quantity <= 0) return;
+        saveWebPurchase(product, orgId, quantity, unitCost, supplierId, defaultCurrency(currency),
+                "Stock inicial", null, quantity, "PER_BASE");
+    }
+
+    private void saveWebPurchase(Product product, String orgId, double quantity,
+                                 java.math.BigDecimal unitPrice, String supplierId,
+                                 String currency, String note, MeasureUnit measureUnit,
+                                 Double inputQuantity, String costInputMode) {
+        Supplier supplier = ownedSupplierNullable(orgId, supplierId);
         Purchase pu = Purchase.builder()
                 .product(product)
                 .supplier(supplier)
-                .quantity(req.getAmount())
-                .unitPrice(req.getUnitPrice())
-                .currency(defaultCurrency(currency))
+                .quantity(quantity)
+                .unitPrice(unitPrice)
+                .currency(currency)
                 .purchasedAt(LocalDateTime.now())
                 .source(Purchase.Source.WEB)
-                .note(req.getNote())
+                .note(note)
+                .measureUnit(measureUnit)
+                .inputQuantity(inputQuantity)
+                .costInputMode(costInputMode)
                 .build();
         reconcileTotal(pu);
         purchaseRepo.save(pu);
     }
 
+    private MeasureUnit resolveMeasureUnit(String orgId, String measureUnitId) {
+        if (measureUnitId == null || measureUnitId.isBlank()) return null;
+        return measureUnitRepository.findByIdAndOrganizationId(measureUnitId, orgId).orElse(null);
+    }
+
     @Transactional(readOnly = true)
     public Dto.PurchasesPageDto listFiltered(String userId, String productId, LocalDate from, LocalDate to) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         LocalDate end = to != null ? to : LocalDate.now();
         LocalDate start = from != null ? from : end.minusDays(30);
         LocalDateTime fromDt = start.atStartOfDay();

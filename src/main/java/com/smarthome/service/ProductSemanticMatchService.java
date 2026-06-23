@@ -28,6 +28,9 @@ public class ProductSemanticMatchService {
     /** Por debajo se trata como “producto nuevo” sin sugerencias. */
     static final double MIN_FUZZY_SUGGEST = 0.72;
     static final double MIN_TOP_TWO_GAP = 0.04;
+    /** Frase contenida en el nombre del producto (ej. "inka kola" ⊂ "gaseosa inka kola"). */
+    static final double SUBSTRING_MATCH_SCORE = 0.93;
+    static final int MIN_SUBSTRING_PHRASE_LEN = 3;
 
     @Getter
     public static final class Candidate {
@@ -86,6 +89,23 @@ public class ProductSemanticMatchService {
 
         Map<String, Double> bestByProductId = new HashMap<>();
         Map<String, Product> prodById = products.stream().collect(Collectors.toMap(Product::getId, p -> p, (a, b) -> a));
+
+        if (nPhrase.length() >= MIN_SUBSTRING_PHRASE_LEN) {
+            for (Product p : products) {
+                String nName = TextNormalize.forMatch(p.getName());
+                if (nName.contains(nPhrase) && !nName.equals(nPhrase)) {
+                    mergeScore(bestByProductId, prodById, p.getId(), SUBSTRING_MATCH_SCORE);
+                }
+            }
+            for (ProductAlias a : aliases) {
+                Product p = a.getProduct();
+                if (p == null) continue;
+                String nAlias = TextNormalize.forMatch(a.getNormalizedAlias());
+                if (nAlias.contains(nPhrase) && !nAlias.equals(nPhrase)) {
+                    mergeScore(bestByProductId, prodById, p.getId(), SUBSTRING_MATCH_SCORE);
+                }
+            }
+        }
 
         for (Product p : products) {
             double s = JW.apply(TextNormalize.forMatch(p.getName()), nPhrase);

@@ -29,6 +29,7 @@ public class OrganizationService {
     private final UserPermissionService userPermissionService;
     private final PasswordEncoder passwordEncoder;
     private final CategoryService categoryService;
+    private final MeasureUnitService measureUnitService;
 
     public Dto.AuthResponse onboard(Dto.OnboardingRequest req) {
         String userId = orgContext.requireUserId();
@@ -38,7 +39,7 @@ public class OrganizationService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Org activa de inmediato: almacén, categorías por defecto y permisos completos
+        // Org pendiente de aprobación del PLATFORM_OWNER; almacén y seeds se crean en activateOrg()
         Organization org = organizationRepository.save(Organization.builder()
                 .name(req.getName().trim())
                 .industry(req.getIndustry())
@@ -46,7 +47,7 @@ public class OrganizationService {
                 .country(req.getCountry())
                 .timezone(req.getTimezone() != null ? req.getTimezone() : "America/Mexico_City")
                 .maxMembers(20)
-                .status(Organization.Status.ACTIVE)
+                .status(Organization.Status.PENDING)
                 .build());
 
         settingsRepository.save(OrganizationSettings.builder()
@@ -61,16 +62,7 @@ public class OrganizationService {
                 .orgRole(OrganizationMember.OrgRole.MANAGER)
                 .build());
 
-        warehouseRepository.save(Warehouse.builder()
-                .organization(org)
-                .name("Principal")
-                .isDefault(true)
-                .build());
-
-        categoryService.seedDefaultsIfEmpty(org.getId());
-
         String token = jwtService.generate(userId, user.getEmail(), null, org.getId(), "MANAGER");
-        SessionPrincipal session = new SessionPrincipal(userId, org.getId(), "MANAGER", null);
         return Dto.AuthResponse.builder()
                 .token(token)
                 .userId(userId)
@@ -79,9 +71,9 @@ public class OrganizationService {
                 .role("MANAGER")
                 .orgRole("MANAGER")
                 .orgId(org.getId())
-                .orgStatus("ACTIVE")
+                .orgStatus("PENDING")
                 .needsOnboarding(false)
-                .permissions(userPermissionService.modulePermissionsForSession(session))
+                .permissions(List.of())
                 .build();
     }
 
@@ -101,6 +93,7 @@ public class OrganizationService {
                     .build());
         }
         categoryService.seedDefaultsIfEmpty(orgId);
+        measureUnitService.seedDefaultsIfEmpty(orgId);
     }
 
     public void rejectOrg(String orgId) {
@@ -120,7 +113,7 @@ public class OrganizationService {
 
     public Dto.OrganizationDto updateMyOrganization(Dto.UpdateOrganizationRequest req) {
         requireManager();
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         Organization org = organizationRepository.findById(orgId)
                 .orElseThrow(() -> new RuntimeException("Organization not found"));
         if (req.getName() != null) org.setName(req.getName().trim());
@@ -134,7 +127,7 @@ public class OrganizationService {
     @Transactional(readOnly = true)
     public List<Dto.OrgMemberDto> listMembers() {
         requireManager();
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         return memberRepository.findAllByOrganizationId(orgId).stream()
                 .map(this::toMemberDto)
                 .collect(Collectors.toList());
@@ -142,7 +135,7 @@ public class OrganizationService {
 
     public Dto.OrgMemberDto addMember(Dto.CreateOrgMemberRequest req) {
         requireManager();
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         Organization org = organizationRepository.findById(orgId)
                 .orElseThrow(() -> new RuntimeException("Organization not found"));
 
@@ -183,7 +176,7 @@ public class OrganizationService {
 
     public Dto.OrgMemberDto updateMember(String memberId, Dto.UpdateOrgMemberRequest req) {
         requireManager();
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         OrganizationMember member = memberRepository.findByIdAndOrganizationId(memberId, orgId)
                 .orElseThrow(() -> new RuntimeException("Miembro no encontrado"));
         if (req.getOrgRole() != null) {
@@ -200,7 +193,7 @@ public class OrganizationService {
 
     public void removeMember(String memberId) {
         requireManager();
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         OrganizationMember member = memberRepository.findByIdAndOrganizationId(memberId, orgId)
                 .orElseThrow(() -> new RuntimeException("Miembro no encontrado"));
         if (member.getOrgRole() == OrganizationMember.OrgRole.MANAGER) {

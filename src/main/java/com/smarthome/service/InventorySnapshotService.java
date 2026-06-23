@@ -47,7 +47,7 @@ public class InventorySnapshotService {
 
     @Transactional(readOnly = true)
     public List<Dto.InventorySnapshotDto> history(LocalDate from, LocalDate to) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         LocalDate end = to != null ? to : LocalDate.now();
         LocalDate start = from != null ? from : end.minusDays(30);
         return snapshotRepository.findByOrganizationIdAndSnapshotDateBetweenOrderBySnapshotDateAsc(orgId, start, end)

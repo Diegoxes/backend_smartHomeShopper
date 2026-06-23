@@ -25,13 +25,13 @@ public class SupplierManagementService {
 
     @Transactional(readOnly = true)
     public List<Dto.SupplierDto> list(String userId) {
-        return supplierRepo.listAllForOrganization(orgContext.requireOrgId()).stream()
+        return supplierRepo.listAllForOrganization(orgContext.requireActiveOrgId()).stream()
                 .map(this::toDto).collect(Collectors.toList());
     }
 
     @Transactional
     public Dto.SupplierDto create(String userId, Dto.CreateSupplierRequest req) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         User owner = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
         Organization org = organizationRepository.findById(orgId).orElseThrow(() -> new RuntimeException("Organization not found"));
         Supplier s = Supplier.builder()
@@ -47,7 +47,7 @@ public class SupplierManagementService {
 
     @Transactional
     public Dto.SupplierDto update(String userId, String id, Dto.UpdateSupplierRequest req) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         Supplier s = supplierRepo.findOwned(id, orgId).orElseThrow(() -> new RuntimeException("Supplier not found"));
         if (req.getName() != null) s.setName(req.getName().trim());
         if (req.getPhone() != null) s.setPhone(req.getPhone());
@@ -58,7 +58,7 @@ public class SupplierManagementService {
 
     @Transactional
     public void delete(String userId, String id) {
-        Supplier s = supplierRepo.findOwned(id, orgContext.requireOrgId())
+        Supplier s = supplierRepo.findOwned(id, orgContext.requireActiveOrgId())
                 .orElseThrow(() -> new RuntimeException("Supplier not found"));
         supplierRepo.delete(s);
     }

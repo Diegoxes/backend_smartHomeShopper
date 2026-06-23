@@ -34,6 +34,13 @@ public class ConsumptionLog {
     @Column(name = "note")
     private String note;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "measure_unit_id")
+    private MeasureUnit measureUnit;
+
+    @Column(name = "input_quantity")
+    private Double inputQuantity;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

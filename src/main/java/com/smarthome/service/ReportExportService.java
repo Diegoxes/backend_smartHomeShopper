@@ -28,7 +28,7 @@ public class ReportExportService {
     private final ProductRepository productRepo;
 
     public byte[] exportXlsx(LocalDate from, LocalDate to) {
-        return exportCompletoXlsxForOrg(orgContext.requireOrgId(), from, to);
+        return exportCompletoXlsxForOrg(orgContext.requireActiveOrgId(), from, to);
     }
 
     public byte[] exportInventarioXlsxForOrg(String orgId) {

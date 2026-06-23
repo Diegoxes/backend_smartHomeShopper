@@ -31,10 +31,12 @@ public class ProductService {
     private final StockLevelRepository stockLevelRepository;
     private final WarehouseRepository warehouseRepository;
     private final InventoryLotService inventoryLotService;
+    private final ProductUomService productUomService;
+    private final MeasureUnitService measureUnitService;
 
     public List<Dto.ProductResponse> listFiltered(Boolean lowStock, Boolean expiringSoon,
                                                   Integer stagnantDays, String category, String q) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         int alertDays = alertDaysForOrg(orgId);
         String cat = blankToNull(category);
         String query = blankToNull(q);
@@ -59,12 +61,12 @@ public class ProductService {
 
     public Dto.ProductResponse getById(String productId, String userId) {
         Product p = findOwned(productId);
-        return toResponse(p, alertDaysForOrg(orgContext.requireOrgId()));
+        return toResponse(p, alertDaysForOrg(orgContext.requireActiveOrgId()));
     }
 
-    @Transactional
+    @Transactional //create
     public Dto.ProductResponse create(String userId, Dto.CreateProductRequest req) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         if (productRepo.findByOrganizationIdAndSku(orgId, req.getSku().trim()).isPresent()) {
             throw new RuntimeException("SKU ya existe en esta organización");
         }
@@ -93,16 +95,24 @@ public class ProductService {
         applyUnitCost(p, req.getUnitCost());
         p = productRepo.save(p);
         syncDefaultStockLevel(orgId, p);
+        productUomService.syncBoxUomFromLegacy(p);
+        if (req.getProductUoms() != null && !req.getProductUoms().isEmpty()) {
+            productUomService.replaceForProduct(p.getId(), req.getProductUoms());
+            p = productRepo.findById(p.getId()).orElse(p);
+        }
+        purchaseRecordService.attachInitialStockIfPriced(
+                p, orgId, req.getQuantity(), req.getUnitCost(), req.getSupplierId(), "MXN");
         return toResponse(p, alertDaysForOrg(orgId));
     }
 
     @Transactional
     public Dto.ProductResponse update(String productId, String userId, Dto.UpdateProductRequest req) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         Product p = findOwned(productId);
+        final String currentProductId = p.getId();
         if (req.getSku() != null && !req.getSku().equals(p.getSku())) {
             productRepo.findByOrganizationIdAndSku(orgId, req.getSku().trim()).ifPresent(existing -> {
-                if (!existing.getId().equals(p.getId())) throw new RuntimeException("SKU ya existe");
+                if (!existing.getId().equals(currentProductId)) throw new RuntimeException("SKU ya existe");
             });
             p.setSku(req.getSku().trim());
         }
@@ -117,35 +127,42 @@ public class ProductService {
         if (req.getSalePrice() != null) p.setSalePrice(req.getSalePrice());
         if (req.getUnitCost() != null) applyUnitCost(p, req.getUnitCost());
         if (req.getPurchaseUnit() != null) p.setPurchaseUnit(req.getPurchaseUnit());
-        if (req.getUnitsPerPurchaseUnit() != null) p.setUnitsPerPurchaseUnit(req.getUnitsPerPurchaseUnit());
+        if (req.getUnitsPerPurchaseUnit() != null) {
+            p.setUnitsPerPurchaseUnit(req.getUnitsPerPurchaseUnit());
+            productUomService.syncBoxUomFromLegacy(p);
+        }
         return toResponse(productRepo.save(p), alertDaysForOrg(orgId));
     }
 
     @Transactional
     public Dto.ProductResponse consume(String productId, String userId, Dto.ConsumeRequest req) {
         Product p = findOwned(productId);
-        double amount = req.getAmount();
-        inventoryLotService.consumeFifo(p, amount);
-        double newQty = Math.max(0, p.getQuantity() - amount);
+        double stockUnits = resolveBaseUnits(p, req, false);
+        MeasureUnit mu = resolveMeasureUnit(req.getMeasureUnitId());
+        inventoryLotService.consumeFifo(p, stockUnits);
+        double newQty = Math.max(0, p.getQuantity() - stockUnits);
         p.setQuantity(newQty);
         productRepo.save(p);
-        syncDefaultStockLevel(orgContext.requireOrgId(), p);
+        syncDefaultStockLevel(orgContext.requireActiveOrgId(), p);
 
         logRepo.save(ConsumptionLog.builder()
                 .product(p)
-                .quantityChange(-amount)
+                .quantityChange(-stockUnits)
                 .actionType(ConsumptionLog.ActionType.CONSUMED)
                 .source(ConsumptionLog.Source.WEB)
                 .note(req.getNote())
+                .measureUnit(mu)
+                .inputQuantity(req.getAmount())
                 .build());
-        return toResponse(p, alertDaysForOrg(orgContext.requireOrgId()));
+        return toResponse(p, alertDaysForOrg(orgContext.requireActiveOrgId()));
     }
 
     @Transactional
     public Dto.ProductResponse restock(String productId, String userId, Dto.ConsumeRequest req) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         Product p = findOwned(productId);
-        double stockUnits = toStockUnits(p, req.getAmount());
+        double stockUnits = resolveBaseUnits(p, req, true);
+        MeasureUnit mu = resolveMeasureUnit(req.getMeasureUnitId());
         p.setQuantity(p.getQuantity() + stockUnits);
         updateCostsOnRestock(p, req.getUnitPrice(), stockUnits);
         productRepo.save(p);
@@ -158,15 +175,17 @@ public class ProductService {
                 .actionType(ConsumptionLog.ActionType.RESTOCKED)
                 .source(ConsumptionLog.Source.WEB)
                 .note(req.getNote())
+                .measureUnit(mu)
+                .inputQuantity(req.getAmount())
                 .build());
 
-        purchaseRecordService.attachToRestockIfPriced(p, orgId, req, "MXN");
+        purchaseRecordService.attachToRestockIfPriced(p, orgId, req, stockUnits, "MXN");
         return toResponse(p, alertDaysForOrg(orgId));
     }
 
     @Transactional
     public Dto.ProductResponse adjust(String productId, Dto.AdjustStockRequest req) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         Product p = findOwned(productId);
         p.setQuantity(Math.max(0, p.getQuantity() + req.getDelta()));
         productRepo.save(p);
@@ -198,7 +217,7 @@ public class ProductService {
                         .build())
                 .collect(Collectors.toList());
 
-        purchaseRepo.findFiltered(orgContext.requireOrgId(), productId, fromDt, toDt).stream()
+        purchaseRepo.findFiltered(orgContext.requireActiveOrgId(), productId, fromDt, toDt).stream()
                 .map(pu -> Dto.ProductMovementDto.builder()
                         .at(pu.getPurchasedAt())
                         .actionType("PURCHASE")
@@ -220,7 +239,7 @@ public class ProductService {
     }
 
     public Dto.DashboardResponse getDashboard(String userId) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         int alertDays = alertDaysForOrg(orgId);
         List<Dto.ProductResponse> all = productRepo.findByOrganizationId(orgId).stream()
                 .map(p -> toResponse(p, alertDays)).collect(Collectors.toList());
@@ -238,7 +257,7 @@ public class ProductService {
     }
 
     private Product findOwned(String productId) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         return productRepo.findByIdAndOrganizationId(productId, orgId)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
     }
@@ -271,6 +290,21 @@ public class ProductService {
                                 .warehouse(wh)
                                 .quantity(p.getQuantity())
                                 .build())));
+    }
+
+    private double resolveBaseUnits(Product p, Dto.ConsumeRequest req, boolean restockLegacyMultiply) {
+        if (req.getMeasureUnitId() != null && !req.getMeasureUnitId().isBlank()) {
+            return productUomService.toBaseUnits(p.getId(), req.getMeasureUnitId(), req.getAmount());
+        }
+        if (restockLegacyMultiply) {
+            return toStockUnits(p, req.getAmount());
+        }
+        return req.getAmount();
+    }
+
+    private MeasureUnit resolveMeasureUnit(String measureUnitId) {
+        if (measureUnitId == null || measureUnitId.isBlank()) return null;
+        return measureUnitService.ownedUnit(measureUnitId, orgContext.requireActiveOrgId());
     }
 
     private double toStockUnits(Product p, double purchaseQty) {
@@ -307,12 +341,12 @@ public class ProductService {
     }
 
     public Dto.ProductResponse toResponse(Product p) {
-        String orgId = p.getOrganization() != null ? p.getOrganization().getId() : orgContext.requireOrgId();
+        String orgId = p.getOrganization() != null ? p.getOrganization().getId() : orgContext.requireActiveOrgId();
         return toResponse(p, alertDaysForOrg(orgId));
     }
 
     public Dto.ProductResponse toResponse(Product p, int alertDays) {
-        String orgId = p.getOrganization() != null ? p.getOrganization().getId() : orgContext.requireOrgId();
+        String orgId = p.getOrganization() != null ? p.getOrganization().getId() : orgContext.requireActiveOrgId();
         int horizon = horizonDaysForOrg(orgId);
         BigDecimal margin = null;
         if (p.getSalePrice() != null && p.getAvgCost() != null && p.getAvgCost().compareTo(BigDecimal.ZERO) > 0) {
@@ -339,6 +373,9 @@ public class ProductService {
                 .marginPercent(margin)
                 .purchaseUnit(p.getPurchaseUnit() != null ? p.getPurchaseUnit().name() : null)
                 .unitsPerPurchaseUnit(p.getUnitsPerPurchaseUnit())
+                .productUoms(productUomService.listForProduct(p.getId()))
+                .stockBreakdown(productUomService.stockBreakdown(p))
+                .stockDisplay(productUomService.stockDisplay(p))
                 .lowStock(p.isLowStock())
                 .expiringSoon(p.isExpiringSoon(alertDays))
                 .daysUntilEmpty(predictDaysUntilEmpty(p, horizon))

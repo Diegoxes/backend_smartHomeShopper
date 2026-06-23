@@ -10,6 +10,17 @@ spring:
   flyway:
     enabled: false
 
+azure:
+  ai:
+    foundry:
+      base-url: https://test.example/openai/v1
+      api-key: test-key
+      deployment: gpt-4o
+
+twilio:
+  account-sid: ACtest
+  auth-token: test-token
+
 jwt:
   secret: test-secret-key-with-enough-length-32
   expiration: 86400000

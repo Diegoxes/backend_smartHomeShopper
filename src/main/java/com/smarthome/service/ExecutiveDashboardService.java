@@ -29,7 +29,7 @@ public class ExecutiveDashboardService {
 
     @Transactional(readOnly = true)
     public Dto.ExecutiveDashboardDto executive() {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         int alertDays = settingsRepository.findByOrganizationId(orgId)
                 .map(s -> s.getExpiryAlertDays()).orElse(7);
 

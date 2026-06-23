@@ -100,6 +100,9 @@ public class Dto {
         private java.math.BigDecimal salePrice;
         private Product.UnitType purchaseUnit;
         private Double unitsPerPurchaseUnit;
+        /** Opcional: proveedor del stock inicial (si hay unitCost se registra compra). */
+        private String supplierId;
+        private java.util.List<ProductUomInput> productUoms;
     }
 
     @Data public static class UpdateProductRequest {
@@ -116,6 +119,8 @@ public class Dto {
         private java.math.BigDecimal salePrice;
         private Product.UnitType purchaseUnit;
         private Double unitsPerPurchaseUnit;
+        /** @deprecated usar PUT /products/{id}/uoms */
+        private java.util.List<ProductUomInput> productUoms;
     }
 
     @Data @Builder public static class ProductResponse {
@@ -137,6 +142,10 @@ public class Dto {
         private java.math.BigDecimal marginPercent;
         private String purchaseUnit;
         private Double unitsPerPurchaseUnit;
+        /** @deprecated mantener lectura; usar productUoms */
+        private java.util.List<ProductUomDto> productUoms;
+        private java.util.List<StockBreakdownDto> stockBreakdown;
+        private String stockDisplay;
         private boolean lowStock;
         private boolean expiringSoon;
         private Double daysUntilEmpty;
@@ -149,7 +158,14 @@ public class Dto {
         private String note;
         /** Con restock registra también una compra. */
         private String supplierId;
+        /** Costo por unidad base confirmado. */
         private java.math.BigDecimal unitPrice;
+        /** Unidad en que se expresa amount (null = legacy / unidad base en consumo). */
+        private String measureUnitId;
+        /** Precio por paquete/caja ingresado (solo referencia UI). */
+        private java.math.BigDecimal packagePrice;
+        /** PER_BASE | PER_PACKAGE */
+        private String costInputMode;
     }
 
     @Data public static class WhatsAppWebhook {
@@ -542,6 +558,60 @@ public class Dto {
         private String description;
         private String colorHex;
         private String createdAt;
+    }
+
+    // ── Unidades de medida ────────────────────────────────────────────────────────
+
+    @Data @Builder
+    public static class MeasureUnitDto {
+        private String id;
+        private String code;
+        private String name;
+        private boolean baseUnit;
+        private boolean active;
+    }
+
+    @Data
+    public static class CreateMeasureUnitRequest {
+        @NotBlank private String code;
+        @NotBlank private String name;
+        private boolean baseUnit;
+    }
+
+    @Data
+    public static class UpdateMeasureUnitRequest {
+        private String name;
+        private Boolean active;
+    }
+
+    @Data @Builder
+    public static class ProductUomDto {
+        private String id;
+        private String measureUnitId;
+        private String code;
+        private String name;
+        private Double factorToBase;
+    }
+
+    @Data
+    public static class ProductUomInput {
+        @NotBlank private String measureUnitId;
+        @NotNull @Positive private Double factorToBase;
+    }
+
+    @Data
+    public static class ReplaceProductUomsRequest {
+        private java.util.List<ProductUomInput> items;
+    }
+
+    @Data @Builder
+    public static class StockBreakdownDto {
+        private String measureUnitId;
+        private String code;
+        private String name;
+        private Double factor;
+        private int fullUnits;
+        private double remainder;
     }
 }
 

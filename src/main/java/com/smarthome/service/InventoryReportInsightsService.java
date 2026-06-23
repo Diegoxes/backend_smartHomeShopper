@@ -34,7 +34,7 @@ public class InventoryReportInsightsService {
 
     @Transactional(readOnly = true)
     public Dto.RotationReportDto rotation(String userId, LocalDate from, LocalDate to) {
-        return rotationForOrg(orgContext.requireOrgId(), from, to);
+        return rotationForOrg(orgContext.requireActiveOrgId(), from, to);
     }
 
     @Transactional(readOnly = true)
@@ -75,7 +75,7 @@ public class InventoryReportInsightsService {
 
     @Transactional(readOnly = true)
     public Dto.InventoryReportDto inventoryOverview(String userId) {
-        return inventoryOverviewForOrg(orgContext.requireOrgId());
+        return inventoryOverviewForOrg(orgContext.requireActiveOrgId());
     }
 
     @Transactional(readOnly = true)
@@ -153,7 +153,7 @@ public class InventoryReportInsightsService {
 
     @Transactional(readOnly = true)
     public List<Dto.SupplierSpendRowDto> bySupplier(String userId, LocalDate from, LocalDate to) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         LocalDate end = to != null ? to : LocalDate.now();
         LocalDate start = from != null ? from : end.minusDays(30);
         return purchaseRepo.sumBySupplier(orgId, start.atStartOfDay(), end.atTime(LocalTime.MAX)).stream()
@@ -167,7 +167,7 @@ public class InventoryReportInsightsService {
 
     @Transactional(readOnly = true)
     public List<Dto.ChannelReportRowDto> byChannel(String userId, LocalDate from, LocalDate to) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         LocalDate end = to != null ? to : LocalDate.now();
         LocalDate start = from != null ? from : end.minusDays(30);
         return consumptionLogRepo.sumByChannel(orgId, start.atStartOfDay(), end.atTime(LocalTime.MAX),

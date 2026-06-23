@@ -101,7 +101,7 @@
       <version>2.5.0</version>
     </dependency>
 
-    <!-- IA vía API compatible OpenAI (DeepSeek); las llamadas son RestTemplate en AiService -->
+    <!-- IA vía Azure AI Foundry Responses API (RestTemplate en FoundryResponsesClient) -->
 
     <!-- Test -->
     <dependency>

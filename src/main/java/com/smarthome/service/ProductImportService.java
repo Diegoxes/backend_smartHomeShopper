@@ -29,6 +29,8 @@ public class ProductImportService {
     private final UserRepository userRepository;
     private final OrganizationContextService orgContext;
     private final AuditService auditService;
+    private final ProductUomService productUomService;
+    private final MeasureUnitService measureUnitService;
 
     public Dto.ProductImportPreviewDto preview(MultipartFile file) {
         List<String> errors = new ArrayList<>();
@@ -57,7 +59,7 @@ public class ProductImportService {
 
     @Transactional
     public Dto.ProductImportPreviewDto commit(MultipartFile file) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         String userId = orgContext.requireUserId();
         Organization org = organizationRepository.findById(orgId).orElseThrow();
         User user = userRepository.findById(userId).orElseThrow();
@@ -92,8 +94,13 @@ public class ProductImportService {
                         .unit(Product.UnitType.UNIT)
                         .consumptionPerUse(1.0)
                         .category(p.length > 4 ? p[4].trim() : null)
+                        .unitsPerPurchaseUnit(p.length > 5 ? parseDouble(p[5], 1) : 1.0)
                         .build();
-                productRepository.save(prod);
+                prod = productRepository.save(prod);
+                measureUnitService.seedDefaultsIfEmpty(orgId);
+                if (p.length > 5 && parseDouble(p[5], 1) > 1) {
+                    productUomService.syncBoxUomFromLegacy(prod);
+                }
                 valid++;
             }
         } catch (Exception e) {

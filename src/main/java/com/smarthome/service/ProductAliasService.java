@@ -18,7 +18,7 @@ public class ProductAliasService {
 
     @Transactional(readOnly = true)
     public void assertProductOwned(String productId) {
-        productRepo.findByIdAndOrganizationId(productId, orgContext.requireOrgId())
+        productRepo.findByIdAndOrganizationId(productId, orgContext.requireActiveOrgId())
                 .orElseThrow(() -> new RuntimeException("Forbidden"));
     }
 

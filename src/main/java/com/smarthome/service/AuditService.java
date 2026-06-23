@@ -19,7 +19,7 @@ public class AuditService {
         try {
             auditLogRepository.save(AuditLog.builder()
                     .userId(orgContext.requireUserId())
-                    .organizationId(orgContext.requireOrgId())
+                    .organizationId(orgContext.requireActiveOrgId())
                     .action(action)
                     .entityType(entityType)
                     .entityId(entityId)

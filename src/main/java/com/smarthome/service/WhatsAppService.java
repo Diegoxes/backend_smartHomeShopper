@@ -33,18 +33,25 @@ public class WhatsAppService {
     private final OrganizationMemberRepository memberRepository;
     private final OrganizationSettingsRepository settingsRepository;
     private final ProductRepository productRepo;
-    private final AiService aiService;
+    private final WhatsAppAsyncProcessor asyncProcessor;
     private final WhatsAppClarificationService clarification;
     private final ProductSemanticMatchService semanticMatch;
     private final WhatsAppInventoryActionService actions;
     private final ReportExportService reportExportService;
     private final WhatsAppReportTokenService reportTokenService;
+    private final MeasureUnitService measureUnitService;
 
     @Value("${app.features.ai.enabled:false}")
     private boolean aiEnabled;
 
     @Transactional
     public WhatsAppReply handleIncoming(String fromRaw, String body) {
+        return handleIncoming(fromRaw, body, 0, null, null);
+    }
+
+    @Transactional
+    public WhatsAppReply handleIncoming(String fromRaw, String body,
+                                          int numMedia, String mediaUrl0, String mediaContentType0) {
         String phone = fromRaw.replace("whatsapp:", "").trim();
         Optional<OrganizationMember> memberOpt = memberRepository.findByUserWhatsappNumber(phone);
 
@@ -91,10 +98,22 @@ public class WhatsAppService {
             }
         }
 
+        if (numMedia > 0 && mediaUrl0 != null && !mediaUrl0.isBlank()) {
+            if (!aiEnabled) {
+                return WhatsAppReply.textOnly(
+                        "Recibí una imagen, pero el asistente IA no está activo. Escribe tu consulta en texto o activa IA.");
+            }
+            asyncProcessor.processImageMessage(
+                    user.getId(), orgId, fromRaw, body, mediaUrl0, mediaContentType0);
+            return WhatsAppReply.textOnly(
+                    "📷 Recibí tu imagen. La estoy analizando, te respondo en unos segundos…");
+        }
+
         if (!aiEnabled) {
             return WhatsAppReply.textOnly(helpMessage());
         }
-        return WhatsAppReply.textOnly(aiService.parseWhatsAppMessage(user, orgId, body != null ? body : ""));
+        asyncProcessor.processAiTextMessage(user.getId(), orgId, fromRaw, body);
+        return WhatsAppReply.textOnly("🤖 Procesando tu mensaje…");
     }
 
     private String helpMessage() {
@@ -103,7 +122,8 @@ public class WhatsAppService {
                 • *inventario* — ver stock
                 • *alertas* — productos bajos o por vencer
                 • *-[producto]* — consumir 1 unidad (ej: *-leche*)
-                • *-5 leche* / *+10 leche* — restar o sumar cantidad
+                • *+10 producto* — sumar unidades
+                • *+5 cajas gaseosa* — sumar en cajas (con equivalencia configurada)
                 • *reporte* — ver tipos de reporte Excel
                 • *reporte inventario* | *rotacion* | *completo*
                 • Responde con el número si te pedimos desambiguar
@@ -204,47 +224,74 @@ public class WhatsAppService {
         return sb.toString();
     }
 
-    private String handleSignedAdjust(User user, String orgId, boolean isAdd, double amount, String spoken) {
+    private String handleSignedAdjust(User user, String orgId, boolean isAdd, double amount, String spokenRaw) {
         if (amount <= 0) {
             return "La cantidad debe ser mayor que cero.";
         }
 
-        ProductSemanticMatchService.MatchResult res = semanticMatch.resolve(orgId, spoken, true);
+        ParsedSpoken parsed = parseSpokenAdjust(orgId, spokenRaw);
+        ProductSemanticMatchService.MatchResult res = semanticMatch.resolve(orgId, parsed.productName(), true);
         String action = isAdd ? "add" : "consume";
 
         if (res instanceof ProductSemanticMatchService.MatchExact ex) {
             Product p = ex.product();
-            applyAdjust(user, p, isAdd, amount);
+            applyAdjust(user, p, isAdd, amount, parsed.measureUnitId());
             Product refreshed = productRepo.findById(p.getId()).orElse(p);
             return formatAdjustReply(refreshed, isAdd);
         }
 
         if (res instanceof ProductSemanticMatchService.MatchFuzzy mf && mf.candidates() != null && !mf.candidates().isEmpty()) {
-            var lines = mf.candidates().stream().limit(5).map(c -> {
-                var line = new WhatsAppClarificationService.CandidateLine();
-                line.setProductId(c.getId());
-                line.setLabel(c.getLabel());
-                line.setScore(c.getScore());
-                return line;
-            }).collect(Collectors.toList());
-
-            var payload = new WhatsAppClarificationService.ClarificationPayload();
-            payload.setKind("quick_adjust");
-            payload.setAction(action);
-            payload.setOriginalName(spoken);
-            payload.setQuantity(amount);
-            payload.setUnit("UNIT");
-            return clarification.savePendingAndReply(user, payload, lines);
+            return clarifyFuzzyMatch(user, action, parsed.productName(), amount, mf);
         }
 
-        return "No encontré *" + spoken + "* en tu catálogo.";
+        return "No encontré *" + parsed.productName() + "* en tu catálogo.";
     }
 
-    private void applyAdjust(User user, Product p, boolean isAdd, double amount) {
+    private record ParsedSpoken(String productName, String measureUnitId) {}
+
+    private ParsedSpoken parseSpokenAdjust(String orgId, String spoken) {
+        String trimmed = spoken.trim();
+        String lower = trimmed.toLowerCase(Locale.ROOT);
+        String boxId = measureUnitService.boxUnitId(orgId);
+        if (lower.startsWith("cajas ") || lower.startsWith("caja ")) {
+            String name = trimmed.replaceFirst("(?i)cajas?\\s+", "").trim();
+            return new ParsedSpoken(name, boxId);
+        }
+        if (lower.endsWith(" cajas") || lower.endsWith(" caja")) {
+            String name = trimmed.replaceFirst("(?i)\\s+cajas?$", "").trim();
+            return new ParsedSpoken(name, boxId);
+        }
+        return new ParsedSpoken(trimmed, null);
+    }
+
+    private String clarifyFuzzyMatch(User user, String action, String spoken, double amount,
+                                   ProductSemanticMatchService.MatchFuzzy mf) {
+        var lines = mf.candidates().stream().limit(5).map(c -> {
+            var line = new WhatsAppClarificationService.CandidateLine();
+            line.setProductId(c.getId());
+            line.setLabel(c.getLabel());
+            line.setScore(c.getScore());
+            return line;
+        }).collect(Collectors.toList());
+
+        var payload = new WhatsAppClarificationService.ClarificationPayload();
+        payload.setKind("quick_adjust");
+        payload.setAction(action);
+        payload.setOriginalName(spoken);
+        payload.setQuantity(amount);
+        payload.setUnit("UNIT");
+
+        if (lines.size() == 1) {
+            return clarification.saveYesNoConfirmAndReply(user, payload, lines.get(0));
+        }
+        return clarification.savePendingAndReply(user, payload, lines);
+    }
+
+    private void applyAdjust(User user, Product p, boolean isAdd, double amount, String measureUnitId) {
         if (isAdd) {
-            actions.addOrRestock(user, p.getUnit(), amount, p.getName(), p);
+            actions.addOrRestock(user, p.getUnit(), amount, p.getName(), p, measureUnitId);
         } else {
-            actions.consume(user, p, amount);
+            actions.consume(user, p, amount, measureUnitId);
         }
     }
 
@@ -283,21 +330,7 @@ public class WhatsAppService {
         }
 
         if (res instanceof ProductSemanticMatchService.MatchFuzzy mf && mf.candidates() != null && !mf.candidates().isEmpty()) {
-            var lines = mf.candidates().stream().limit(5).map(c -> {
-                var line = new WhatsAppClarificationService.CandidateLine();
-                line.setProductId(c.getId());
-                line.setLabel(c.getLabel());
-                line.setScore(c.getScore());
-                return line;
-            }).collect(Collectors.toList());
-
-            var payload = new WhatsAppClarificationService.ClarificationPayload();
-            payload.setKind("quick_consume");
-            payload.setAction("consume");
-            payload.setOriginalName(spoken);
-            payload.setQuantity(amount);
-            payload.setUnit("UNIT");
-            return clarification.savePendingAndReply(user, payload, lines);
+            return clarifyFuzzyMatch(user, "consume", spoken, amount, mf);
         }
 
         return "No encontré *" + spoken + "* en tu catálogo.";

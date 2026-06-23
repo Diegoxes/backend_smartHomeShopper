@@ -7,58 +7,64 @@ import com.smarthome.entity.User;
 import com.smarthome.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class AiService {
+public class BusinessAssistantService {
 
-    private final ProductRepository productRepo;
-    private final ObjectMapper objectMapper;
-    private final RestTemplate restTemplate;
-    private final ProductSemanticMatchService semanticMatch;
-    private final WhatsAppClarificationService clarification;
-    private final WhatsAppInventoryActionService actions;
-
-    @Value("${deepseek.api-key}")
-    private String deepseekApiKey;
-
-    @Value("${deepseek.base-url}")
-    private String deepseekBaseUrl;
-
-    @Value("${deepseek.model}")
-    private String deepseekModel;
-
-    public String parseWhatsAppMessage(User user, String orgId, String rawMessage) {
-        String systemPrompt = """
-            Eres un asistente de inventario B2B. Analiza el mensaje y extrae productos.
-            Responde SOLO con un JSON con este formato (sin markdown, sin explicaciones):
+    private static final String INTENT_PROMPT = """
+            Eres un asistente de inventario B2B para WhatsApp. Analiza el mensaje del usuario (y opcionalmente una imagen).
+            Responde SOLO con un JSON (sin markdown):
             {
               "action": "add" | "consume" | "query" | "unknown",
               "items": [
                 { "name": "nombre del producto", "quantity": 1.0, "unit": "UNIT|KG|LITER|GRAM|ML|PACK" }
               ],
-              "reply": "respuesta amigable en español confirmando la acción"
+              "reply": "respuesta amigable en español"
             }
             Reglas:
-            - "add"/"compré"/"tengo" → action: add
-            - "usé"/"gasté"/"consumí" → action: consume
-            - "cuánto tengo"/"inventario" → action: query
+            - "add"/"compré"/"tengo"/"entrada" → action: add
+            - "usé"/"gasté"/"consumí"/"salida" → action: consume
+            - preguntas sobre stock, alertas, valor, catálogo → action: query (items vacío; usa el contexto del negocio en reply)
             - Si no entiendes → action: unknown
+            - Para imágenes: identifica productos, cantidades o tickets de compra si es posible
             """;
 
+    private final ProductRepository productRepo;
+    private final ObjectMapper objectMapper;
+    private final FoundryResponsesClient foundryClient;
+    private final BusinessContextService businessContext;
+    private final ProductSemanticMatchService semanticMatch;
+    private final WhatsAppClarificationService clarification;
+    private final WhatsAppInventoryActionService actions;
+
+    public String parseWhatsAppMessage(User user, String orgId, String rawMessage) {
+        return process(user, orgId, rawMessage, null, null);
+    }
+
+    public String parseWhatsAppMessageWithImage(User user, String orgId, String caption,
+                                                  byte[] imageBytes, String mimeType) {
+        String text = caption != null && !caption.isBlank()
+                ? caption
+                : "Analiza esta imagen en el contexto de mi inventario.";
+        return process(user, orgId, text, imageBytes, mimeType);
+    }
+
+    private String process(User user, String orgId, String userText,
+                           byte[] imageBytes, String mimeType) {
         try {
-            String raw = callDeepSeekChat(systemPrompt, rawMessage);
+            String context = businessContext.buildContextForOrg(orgId);
+            String instructions = INTENT_PROMPT + "\n\nContexto del negocio:\n" + context;
+
+            String raw = imageBytes != null && imageBytes.length > 0
+                    ? foundryClient.completeMultimodal(instructions, userText, imageBytes, mimeType)
+                    : foundryClient.completeText(instructions, userText);
+
             String jsonResponse = extractJsonObject(raw);
             JsonNode root = objectMapper.readTree(jsonResponse);
 
@@ -66,7 +72,9 @@ public class AiService {
             String reply = root.path("reply").asText("Entendido.");
             JsonNode items = root.path("items");
 
-            if (!("add".equals(action) || "consume".equals(action)) || !items.isArray() || items.isEmpty()) {
+            if ("query".equals(action) || "unknown".equals(action)
+                    || !("add".equals(action) || "consume".equals(action))
+                    || !items.isArray() || items.isEmpty()) {
                 return reply;
             }
 
@@ -99,6 +107,9 @@ public class AiService {
                         payload.setOriginalName(name);
                         payload.setQuantity(quantity);
                         payload.setUnit(unitStr);
+                        if (lines.size() == 1) {
+                            return clarification.saveYesNoConfirmAndReply(user, payload, lines.get(0));
+                        }
                         return clarification.savePendingAndReply(user, payload, lines);
                     }
                 }
@@ -123,7 +134,7 @@ public class AiService {
             return reply;
 
         } catch (Exception e) {
-            log.error("DeepSeek parsing failed: {}", e.getMessage());
+            log.error("Foundry parsing failed: {}", e.getMessage());
             return "No pude entender tu mensaje. Prueba: \"Compré 2 leches y 1kg de arroz\"";
         }
     }
@@ -135,52 +146,6 @@ public class AiService {
                 .findFirst();
     }
 
-    @SuppressWarnings("unchecked")
-    private String callDeepSeekChat(String system, String userMsg) {
-        if (deepseekApiKey == null || deepseekApiKey.isBlank()) {
-            throw new IllegalStateException("deepseek.api-key / DEEPSEEK_API_KEY no configurada");
-        }
-        String base = deepseekBaseUrl.replaceAll("/+$", "");
-        String url = base + "/v1/chat/completions";
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(deepseekApiKey);
-
-        Map<String, Object> body = new HashMap<>();
-        body.put("model", deepseekModel);
-        body.put("temperature", 0.2);
-        body.put("messages", List.of(
-                Map.of("role", "system", "content", system),
-                Map.of("role", "user", "content", userMsg)
-        ));
-
-        ResponseEntity<Map> response = restTemplate.exchange(
-                url,
-                HttpMethod.POST,
-                new HttpEntity<>(body, headers),
-                Map.class
-        );
-
-        Map<String, Object> respBody = response.getBody();
-        if (respBody == null) {
-            throw new IllegalStateException("Respuesta vacía de DeepSeek");
-        }
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> choices = (List<Map<String, Object>>) respBody.get("choices");
-        if (choices == null || choices.isEmpty()) {
-            throw new IllegalStateException("choices vacío en respuesta DeepSeek");
-        }
-        @SuppressWarnings("unchecked")
-        Map<String, Object> msg = (Map<String, Object>) choices.get(0).get("message");
-        Object content = msg != null ? msg.get("content") : null;
-        if (content == null) {
-            throw new IllegalStateException("message.content ausente");
-        }
-        return content.toString().trim();
-    }
-
-    /** Recorta fences ```json ... ``` si el modelo los incluye. */
     private static String extractJsonObject(String raw) {
         String s = raw.trim();
         if (s.startsWith("```")) {

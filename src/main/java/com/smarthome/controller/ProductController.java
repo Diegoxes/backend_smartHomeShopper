@@ -3,6 +3,7 @@ package com.smarthome.controller;
 import com.smarthome.dto.Dto;
 import com.smarthome.service.ProductAliasService;
 import com.smarthome.service.ProductService;
+import com.smarthome.service.ProductUomService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +21,7 @@ public class ProductController {
 
     private final ProductService productService;
     private final ProductAliasService productAliasService;
+    private final ProductUomService productUomService;
 
     @GetMapping
     @PreAuthorize("hasAuthority('INVENTORY_READ') or hasAuthority('REPORTS_READ') or hasAnyRole('ORG_MANAGER','ORG_MEMBER','ORG_VIEWER')")
@@ -48,7 +50,7 @@ public class ProductController {
         return productService.movements(id, from, to);
     }
 
-    @PostMapping
+    @PostMapping //crea unu 
     @PreAuthorize("hasAuthority('INVENTORY_CREATE') or hasAnyRole('ORG_MANAGER','ORG_MEMBER')")
     public ResponseEntity<Dto.ProductResponse> create(
             @AuthenticationPrincipal String userId,
@@ -98,6 +100,20 @@ public class ProductController {
             @AuthenticationPrincipal String userId,
             @RequestBody Dto.ConsumeRequest req) {
         return productService.restock(id, userId, req);
+    }
+
+    @GetMapping("/{id}/uoms")
+    @PreAuthorize("hasAuthority('INVENTORY_READ') or hasAnyRole('ORG_MANAGER','ORG_MEMBER','ORG_VIEWER')")
+    public List<Dto.ProductUomDto> listUoms(@PathVariable String id) {
+        return productUomService.listForProduct(id);
+    }
+
+    @PutMapping("/{id}/uoms")
+    @PreAuthorize("hasAuthority('INVENTORY_UPDATE') or hasAnyRole('ORG_MANAGER','ORG_MEMBER')")
+    public List<Dto.ProductUomDto> replaceUoms(
+            @PathVariable String id,
+            @RequestBody Dto.ReplaceProductUomsRequest body) {
+        return productUomService.replaceForProduct(id, body != null ? body.getItems() : List.of());
     }
 
     @DeleteMapping("/{id}")

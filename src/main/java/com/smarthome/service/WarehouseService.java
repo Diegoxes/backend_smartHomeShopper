@@ -29,13 +29,13 @@ public class WarehouseService {
 
     @Transactional(readOnly = true)
     public List<Dto.WarehouseDto> list() {
-        return warehouseRepository.findByOrganizationIdOrderByNameAsc(orgContext.requireOrgId()).stream()
+        return warehouseRepository.findByOrganizationIdOrderByNameAsc(orgContext.requireActiveOrgId()).stream()
                 .map(this::toDto).collect(Collectors.toList());
     }
 
     @Transactional
     public Dto.WarehouseDto create(Dto.CreateWarehouseRequest req) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         Organization org = organizationRepository.findById(orgId)
                 .orElseThrow(() -> new RuntimeException("Organization not found"));
         Warehouse wh = warehouseRepository.save(Warehouse.builder()
@@ -49,7 +49,7 @@ public class WarehouseService {
 
     @Transactional
     public void transfer(Dto.TransferStockRequest req) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         Warehouse from = warehouseRepository.findByIdAndOrganizationId(req.getFromWarehouseId(), orgId)
                 .orElseThrow(() -> new RuntimeException("Almacén origen no encontrado"));
         Warehouse to = warehouseRepository.findByIdAndOrganizationId(req.getToWarehouseId(), orgId)

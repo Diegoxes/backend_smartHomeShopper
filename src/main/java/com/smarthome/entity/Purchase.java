@@ -50,6 +50,16 @@ public class Purchase {
     @Column(length = 500)
     private String note;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "measure_unit_id")
+    private MeasureUnit measureUnit;
+
+    @Column(name = "input_quantity")
+    private Double inputQuantity;
+
+    @Column(name = "cost_input_mode", length = 32)
+    private String costInputMode;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

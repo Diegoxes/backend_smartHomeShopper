@@ -25,7 +25,7 @@ public class CategoryController {
     @GetMapping
     @PreAuthorize("hasAuthority('INVENTORY_READ') or hasAnyRole('ORG_MANAGER','ORG_MEMBER','ORG_VIEWER')")
     public ResponseEntity<List<Dto.CategoryResponse>> getAll(@AuthenticationPrincipal String userId) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
 
         List<Category> categories = categoryService.getAllByOrganization(orgId);
 
@@ -48,7 +48,7 @@ public class CategoryController {
             @Valid @RequestBody Dto.CreateCategoryRequest req,
             @AuthenticationPrincipal String userId
     ) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
 
         Category category = categoryService.create(
                 orgId,
@@ -71,7 +71,7 @@ public class CategoryController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('INVENTORY_DELETE') or hasRole('ORG_MANAGER')")
     public ResponseEntity<Void> delete(@PathVariable String id, @AuthenticationPrincipal String userId) {
-        String orgId = orgContext.requireOrgId();
+        String orgId = orgContext.requireActiveOrgId();
         categoryService.delete(id, orgId);
         return ResponseEntity.noContent().build();
     }

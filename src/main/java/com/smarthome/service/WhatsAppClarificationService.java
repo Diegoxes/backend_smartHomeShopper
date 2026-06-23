@@ -28,6 +28,8 @@ public class WhatsAppClarificationService {
 
     private static final Pattern LEADING_INT = Pattern.compile("^\\s*(\\d+)\\s*$");
     private static final Pattern CREAR = Pattern.compile("(?i).*\\b(crear|nuevo|nueva)\\b.*");
+    private static final Pattern SI = Pattern.compile("(?i)^\\s*(si|sí|yes|s|y|1)\\s*$");
+    private static final Pattern NO = Pattern.compile("(?i)^\\s*(no|n|2)\\s*$");
 
     private final WhatsAppPendingClarificationRepository pendingRepo;
     private final ProductRepository productRepo;
@@ -72,6 +74,21 @@ public class WhatsAppClarificationService {
         }
 
         String msg = messageBody.trim();
+
+        if ("yes_no_confirm".equals(payload.getKind())) {
+            if (payload.getCandidates() == null || payload.getCandidates().isEmpty()) {
+                pendingRepo.delete(row);
+                return Optional.of("No hay opciones pendientes. Envía otro mensaje.");
+            }
+            if (SI.matcher(msg).matches()) {
+                return finalizeExisting(user, row, payload, payload.getCandidates().get(0).getProductId());
+            }
+            if (NO.matcher(msg).matches()) {
+                return finalizeCreateNew(user, row, payload);
+            }
+            return Optional.of("Responde *sí* para usar el producto existente, o *no* para crear uno nuevo.");
+        }
+
         if (payload.getCandidates() == null || payload.getCandidates().isEmpty()) {
             pendingRepo.delete(row);
             return Optional.of("No hay opciones pendientes. Envía otro mensaje.");
@@ -147,6 +164,33 @@ public class WhatsAppClarificationService {
         sb.append(nOpt).append(") Crear *nuevo producto*: ").append(escapeXml(payload.getOriginalName())).append("\n\n")
                 .append("Responde con el *número* o escribe *crear*.");
         return sb.toString();
+    }
+
+    @Transactional
+    public String saveYesNoConfirmAndReply(User user, ClarificationPayload payload, CandidateLine candidate) {
+        try {
+            payload.setKind("yes_no_confirm");
+            payload.setCandidates(List.of(candidate));
+            String json = objectMapper.writeValueAsString(payload);
+            pendingRepo.purgeForUser(user.getId());
+            pendingRepo.save(WhatsAppPendingClarification.builder()
+                    .user(user)
+                    .payloadJson(json)
+                    .expiresAt(LocalDateTime.now().plusMinutes(20))
+                    .build());
+        } catch (Exception e) {
+            log.error("No se pudo guardar confirmación sí/no", e);
+            return "Error interno; intenta en un momento.";
+        }
+        String verb = "consume".equalsIgnoreCase(payload.getAction()) ? "restar" : "sumar";
+        return ("¿Te referías a *" + escapeXml(candidate.getLabel()) + "*?\n"
+                + "Dijiste *" + escapeXml(payload.getOriginalName()) + "*.\n\n"
+                + "Responde *sí* para " + verb + " *" + formatQty(payload.getQuantity()) + "*, "
+                + "o *no* para crear *" + escapeXml(payload.getOriginalName()) + "* como producto nuevo.");
+    }
+
+    private static String formatQty(double q) {
+        return q == Math.floor(q) ? String.valueOf((long) q) : String.valueOf(q);
     }
 
     private Optional<String> finalizeExisting(User user, WhatsAppPendingClarification row, ClarificationPayload p, String productId) {
