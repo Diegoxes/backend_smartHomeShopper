@@ -9,15 +9,15 @@ import java.time.LocalDateTime;
 public class Dto {
 
     @Data public static class RegisterRequest {
-        @NotBlank @Email private String email;
-        @NotBlank @Size(min = 6) private String password;
-        @NotBlank private String name;
-        private String whatsappNumber;
+        @NotBlank @Email @Size(max = 254) private String email;
+        @NotBlank @Size(min = 6, max = 128) private String password;
+        @NotBlank @Size(min = 2, max = 100) private String name;
+        @Size(max = 20) @Pattern(regexp = "^$|^\\+?[0-9]{7,19}$", message = "WhatsApp inválido") private String whatsappNumber;
     }
 
     @Data public static class LoginRequest {
-        @NotBlank @Email private String email;
-        @NotBlank private String password;
+        @NotBlank @Email @Size(max = 254) private String email;
+        @NotBlank @Size(max = 128) private String password;
     }
 
     @Data @Builder public static class AuthResponse {
@@ -85,15 +85,15 @@ public class Dto {
     }
 
     @Data public static class CreateProductRequest {
-        @NotBlank private String name;
-        @NotBlank private String sku;
+        @NotBlank @Size(max = 255) private String name;
+        @NotBlank @Size(max = 64) private String sku;
         private String internalCode;
         @NotNull @Min(0) private Double quantity;
         @NotNull @Min(0) private Double minQuantity;
         @NotNull private Product.UnitType unit;
         private Double consumptionPerUse;
         private LocalDate expiryDate;
-        private String barcode;
+        @Size(max = 100) private String barcode;
         private String category;
         private String imageUrl;
         private java.math.BigDecimal unitCost;
@@ -155,7 +155,7 @@ public class Dto {
 
     @Data public static class ConsumeRequest {
         @NotNull @Positive private Double amount;
-        private String note;
+        @Size(max = 500) private String note;
         /** Con restock registra también una compra. */
         private String supplierId;
         /** Costo por unidad base confirmado. */
@@ -185,7 +185,7 @@ public class Dto {
 
     @Data public static class AdjustStockRequest {
         @NotNull private Double delta;
-        @NotBlank private String reason;
+        @NotBlank @Size(max = 500) private String reason;
     }
 
     @Data @Builder public static class ProductMovementDto {
@@ -200,8 +200,8 @@ public class Dto {
     // ── Organización ──────────────────────────────────────────────────────────
 
     @Data public static class OnboardingRequest {
-        @NotBlank private String name;
-        private String industry;
+        @NotBlank @Size(min = 2, max = 255) private String name;
+        @Size(max = 128) private String industry;
         private String currency;
         private String country;
         private String timezone;
@@ -239,11 +239,11 @@ public class Dto {
     }
 
     @Data public static class CreateOrgMemberRequest {
-        @NotBlank @Email private String email;
-        @NotBlank @Size(min = 6) private String password;
-        @NotBlank private String name;
+        @NotBlank @Email @Size(max = 254) private String email;
+        @NotBlank @Size(min = 6, max = 128) private String password;
+        @NotBlank @Size(min = 2, max = 100) private String name;
         @NotBlank private String orgRole;
-        private String whatsappNumber;
+        @Size(max = 20) @Pattern(regexp = "^$|^\\+?[0-9]{7,19}$", message = "WhatsApp inválido") private String whatsappNumber;
     }
 
     @Data public static class UpdateOrgMemberRequest {
@@ -404,11 +404,11 @@ public class Dto {
 
     @Data
     public static class AdminCreateUserRequest {
-        @NotBlank @Email private String email;
-        @NotBlank @Size(min = 6) private String password;
-        @NotBlank private String name;
+        @NotBlank @Email @Size(max = 254) private String email;
+        @NotBlank @Size(min = 6, max = 128) private String password;
+        @NotBlank @Size(min = 2, max = 100) private String name;
         @NotNull private Long roleId;
-        private String whatsappNumber;
+        @Size(max = 20) @Pattern(regexp = "^$|^\\+?[0-9]{7,19}$", message = "WhatsApp inválido") private String whatsappNumber;
         /** Obligatorio si roleId es MANAGER, MEMBER o VIEWER */
         private String organizationId;
     }
@@ -424,7 +424,7 @@ public class Dto {
 
     @Data
     public static class AddAliasRequest {
-        @NotBlank private String alias;
+        @NotBlank @Size(min = 2, max = 255) private String alias;
     }
 
     @Data @Builder
@@ -471,7 +471,7 @@ public class Dto {
 
     @Data
     public static class CreateSupplierRequest {
-        @NotBlank private String name;
+        @NotBlank @Size(max = 255) private String name;
         private String phone;
         @Min(0) private Integer leadTimeDays;
         private String notes;
@@ -546,7 +546,7 @@ public class Dto {
     // ── Category ──────────────────────────────────────────────────────────────────
     @Data
     public static class CreateCategoryRequest {
-        @NotBlank private String name;
+        @NotBlank @Size(max = 100) private String name;
         private String description;
         private String colorHex;
     }
@@ -573,8 +573,8 @@ public class Dto {
 
     @Data
     public static class CreateMeasureUnitRequest {
-        @NotBlank private String code;
-        @NotBlank private String name;
+        @NotBlank @Size(max = 32) private String code;
+        @NotBlank @Size(max = 100) private String name;
         private boolean baseUnit;
     }
 
